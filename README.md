@@ -9,13 +9,14 @@ A C++ desktop application for generating and reading custom barcodes
     1. cd C:\
     2. git clone https://github.com/microsoft/vcpkg
     3. .\vcpkg\bootstrap-vcpkg.bat
-    4. setx VCPKG_ROOT "C:\vcpkg"
-    Then Restart Visual Studio 
-3. Install Qt 6.12
+3. setx VCPKG_ROOT "C:\vcpkg"
+4. setx CMAKE_PREFIX_PATH "C:\Qt\6.12.0\msvc2022_64"
+5. Restart Visual Studio    
+6. Install Qt 6.12
      Install in C drive preferably 
      *Important*
      Tick custom installation and go to Qt for development -> Qt 6.12.0 -> tick MSVC 2022 64-bit and uncheck MinGW
-4. Pull all the files from main
-5. Select the default configure preset (switch from debugx64)
-6. Build, the first build takes around 30 mins
-7. Run to check the sample main.cpp   
+7. Pull all the files from main
+8. Select the default configure preset (switch from debugx64)
+9. Build, the first build takes around 30 mins
+10. Run to check the sample main.cpp   
