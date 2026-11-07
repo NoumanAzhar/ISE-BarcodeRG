@@ -13,3 +13,16 @@ build/
 ui_*.h
 moc_*.cpp
 qrc_*.cpp
+
+# CMake / vcpkg
+out/
+CMakeUserPresets.json
+CMakeSettings.json
+vcpkg_installed/
+
+# Compiled output
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.dll
