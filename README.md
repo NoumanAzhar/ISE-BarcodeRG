@@ -1,2 +1,19 @@
 # ISE-BarcodeRG
 A C++ desktop application for generating and reading custom barcodes
+
+
+# SETUP GUIDE
+1. Clone the repo and switch to your branch and open VS
+2. Install vcpkg
+    Commands: 
+    cd C:\
+    git clone https://github.com/microsoft/vcpkg
+    .\vcpkg\bootstrap-vcpkg.bat
+    setx VCPKG_ROOT "C:\vcpkg"
+3. Install Qt 6.12
+     Install in C drive preferably 
+     *Important*  Tick custom installation and go to Qt for development -> Qt 6.12.0 -> tick MSVC 2022 64-bit and uncheck MinGW
+4. Pull all the files from main
+5. Select the default configure preset (switch from debugx64)
+6. Build, the first build takes around 30 mins
+7. Run to check the sample main.cpp   
