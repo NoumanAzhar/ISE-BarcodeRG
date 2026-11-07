@@ -1,0 +1,15 @@
+# Visual Studio build & temporary files
+.vs/
+x64/
+Debug/
+Release/
+*.user
+*.suo
+*.aps
+
+# Qt / build artifacts
+GeneratedFiles/
+build/
+ui_*.h
+moc_*.cpp
+qrc_*.cpp
