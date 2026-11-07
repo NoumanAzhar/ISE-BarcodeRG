@@ -10,6 +10,7 @@ A C++ desktop application for generating and reading custom barcodes
     2. git clone https://github.com/microsoft/vcpkg
     3. .\vcpkg\bootstrap-vcpkg.bat
     4. setx VCPKG_ROOT "C:\vcpkg"
+    Then Restart Visual Studio 
 3. Install Qt 6.12
      Install in C drive preferably 
      *Important*
