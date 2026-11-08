@@ -11,10 +11,10 @@ Increment 1 : generate a barcode from a 6-digit number, save it as an image, and
 1. Install Visual Studio with the "Desktop development with C++" workload.
 2. Install vcpkg (PowerShell):
    
-   cd C:\
-   git clone https://github.com/microsoft/vcpkg
-   .\vcpkg\bootstrap-vcpkg.bat
-   setx VCPKG_ROOT "C:\vcpkg"
+   1. cd C:\
+   2. git clone https://github.com/microsoft/vcpkg
+   3. .\vcpkg\bootstrap-vcpkg.bat
+   4. setx VCPKG_ROOT "C:\vcpkg"
    
 3. Install Qt 6.12 in C:\Qt (Qt Online Installer). Choose Custom installation,
    then Qt for Development > Qt 6.12.0, tick "MSVC 2022 64-bit", untick MinGW.
