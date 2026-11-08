@@ -8,48 +8,42 @@ Increment 1 : generate a barcode from a 6-digit number, save it as an image, and
 
 ## Setup (one time)
 
-1. Install Visual Studio with the "Desktop development with C++" workload.
-2. Install vcpkg (PowerShell):
-   ```
-   cd C:\
-   git clone https://github.com/microsoft/vcpkg
-   .\vcpkg\bootstrap-vcpkg.bat
-   setx VCPKG_ROOT "C:\vcpkg"
-   ```
-3. Install Qt 6.12 in C:\Qt (Qt Online Installer). Choose Custom installation,
-   then Qt for Development > Qt 6.12.0, tick "MSVC 2022 64-bit", untick MinGW.
-4. Set the Qt path (change it if Qt is installed elsewhere):
-   ```
-   setx CMAKE_PREFIX_PATH "C:\Qt\6.12.0\msvc2022_64"
-   ```
-5. Close and reopen Visual Studio.
+1. Clone the repo and switch to your branch and open VS
 
-## Get the code and build
+2. Install vcpkg Commands:
 
-1. Clone the repo, create your branch, and merge the latest main:
-   ```
-   git fetch
-   git checkout your-name
-   git merge origin/main
-   ```
-2. Open the folder in Visual Studio (File > Open > Folder).
-3. In the top toolbar, switch the configuration from x64-Debug to "default".
-4. Right-click CMakeLists.txt > Configure Cache. The first time takes about
-   30+ minutes (it builds OpenCV). Keep the laptop plugged in.
-5. Select app.exe as the startup item, then Build > Build All, then Ctrl+F5.
+   1. cd C:\
+
+   2. git clone https://github.com/microsoft/vcpkg
+
+   3. .\vcpkg\bootstrap-vcpkg.bat
+
+3. Install Qt 6.12 Install in C drive preferably Important Tick custom installation and go to Qt for development → Qt 6.12.0 → tick MSVC 2022 64-bit and uncheck MinGW
+
+4. setx VCPKG_ROOT "C:\vcpkg"
+
+5. setx CMAKE_PREFIX_PATH "C:\Qt\6.12.0\msvc2022_64"
+
+6. Restart Visual Studio
+
+7. Select the default configure preset (switch from debugx64)
+
+8. Build, the first build takes around 30 mins
+
+9. Run to check the sample main.cpp
 
 ## Project structure
 
-- Put .cpp, .h, .ui and .qrc files in the repo root or in `src/`.
+- Put .cpp, .h, .ui and .qrc files in the repo root or in src/.
   CMake picks them up automatically, so there is no need to edit CMakeLists.txt.
-  Files in deeper folders (e.g. `src/ui/`) are NOT picked up.
+  Files in deeper folders (e.g. src/ui/) are NOT picked up.
 - Keep each .ui file next to its .h/.cpp, with one owner per .ui file.
 - Keep UI code (Qt) separate from barcode logic (plain C++ and OpenCV).
 
 ## Team workflow
 
-- Never push to `main` directly. Work on your own branch and open a pull request.
-- Merge `origin/main` into your branch regularly.
+- Never push to main directly. Work on your own branch and open a pull request.
+- Merge origin/main into your branch regularly.
 
 ## Troubleshooting
 
