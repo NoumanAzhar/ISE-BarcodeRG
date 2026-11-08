@@ -1,9 +1,6 @@
 {
   "name": "barcoderg",
   "version": "0.1.0",
-  "dependencies": [
-    "opencv4",
-    "nu-book-zxing-cpp"
-  ],
+  "dependencies": ["opencv4"],
   "builtin-baseline": "6fdd23fa0a9479a9f9a1c48178696f60cf39255d"
 }
