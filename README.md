@@ -28,8 +28,8 @@ Increment 1 : generate a barcode from a 6-digit number, save it as an image, and
 
 1. Clone the repo, create your branch, and merge the latest main:
    ```
-   git checkout -b your-name
    git fetch
+   git checkout your-name
    git merge origin/main
    ```
 2. Open the folder in Visual Studio (File > Open > Folder).
