@@ -63,5 +63,16 @@ optional<string> decodeRuns(const vector<int>& runs)
         }
         symbols.push_back(value);
     }
+    if (symbols[0] != 105) // start C should always be 105
+    {
+		return nullopt;
+    }
+	// calculate checksum
+    int sum = symbols[0] + 1 * symbols[1] + 2 * symbols[2] + 3 * symbols[3];
+	int checksum = sum % 103;
+	if (checksum != symbols[4]) // symbols[4] stores the check digit
+    {
+		return nullopt;
+    }
 	return nullopt; // temperory
 }
