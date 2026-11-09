@@ -1,6 +1,8 @@
 #include "barcode_decode.h"
+#include <cmath>
 
-static double estimateModuleWidth(const std::vector<int>& runs)
+using namespace std;
+static double estimateModuleWidth(const vector<int>& runs)
 {
     if (runs.size() < 6) {
         return -1.0; // Invalid number of runs
@@ -11,11 +13,38 @@ static double estimateModuleWidth(const std::vector<int>& runs)
 	}
 	return width;
 }
-std::optional<std::string> decodeRuns(const std::vector<int>& runs)
+
+static string runsToPattern(const vector<int>& runs, size_t start, double moduleWidth)
+{
+    string pattern;
+    
+    if (start + 6 > runs.size())
+    {
+		return ""; // Return empty string to avoid out-of-bounds access
+    }
+    
+    for (int i = 0; i < 6; i++)
+    {
+        int n = (int)lround(runs[start + i] / moduleWidth);
+        char c;
+        if (i % 2 == 0)
+        {
+            c = '1'; // bar
+        }
+        else
+        {
+            c = '0'; // space
+        }
+        pattern.append(n, c);
+    }
+    return pattern;
+}
+
+optional<std::string> decodeRuns(const vector<int>& runs)
 {
 	double moduleWidth = estimateModuleWidth(runs);
 	if (moduleWidth <= 0.0) {
-		return std::nullopt; // Invalid module width
+		return nullopt; // Invalid module width
 	}
-	return std::nullopt; // temperory
+	return nullopt; // temperory
 }
