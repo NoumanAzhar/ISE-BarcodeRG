@@ -1,7 +1,8 @@
 #include "barcode_decode.h"
 #include <cmath>
-
+#include "code128.h"
 using namespace std;
+
 static double estimateModuleWidth(const vector<int>& runs)
 {
     if (runs.size() < 6) {
@@ -40,7 +41,7 @@ static string runsToPattern(const vector<int>& runs, size_t start, double module
     return pattern;
 }
 
-optional<std::string> decodeRuns(const vector<int>& runs)
+optional<string> decodeRuns(const vector<int>& runs)
 {
 	double moduleWidth = estimateModuleWidth(runs);
 	if (moduleWidth <= 0.0) {
@@ -49,6 +50,18 @@ optional<std::string> decodeRuns(const vector<int>& runs)
     if (runs.size() < 37)
     {
         return nullopt;
+    }
+    vector<int> symbols;
+
+    for (int s = 0; s < 5; s++)
+    {
+        string pattern = runsToPattern(runs, s * 6, moduleWidth);
+        int value = patternToSymbol(pattern);
+        if (value < 0)
+        {
+            return nullopt;
+        }
+        symbols.push_back(value);
     }
 	return nullopt; // temperory
 }
