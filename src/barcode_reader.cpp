@@ -9,6 +9,24 @@
 #include <vector>
 
 namespace {
+    // Transparent background -> white (otherwise it turns black and hides the bars)
+    cv::Mat flattenAlpha(const cv::Mat& bgra) {
+        std::vector<cv::Mat> ch;
+        cv::split(bgra, ch);
+        cv::Mat a, inv;
+        ch[3].convertTo(a, CV_32F, 1.0 / 255.0);
+        cv::subtract(cv::Scalar(1.0), a, inv);
+        std::vector<cv::Mat> out(3);
+        for (int i = 0; i < 3; ++i) {
+            cv::Mat c;
+            ch[i].convertTo(c, CV_32F);
+            out[i] = c.mul(a) + inv * 255.0;
+        }
+        cv::Mat merged;
+        cv::merge(out, merged);
+        merged.convertTo(merged, CV_8U);
+        return merged;
+    }
 
     // Reads the file bytes ourselves so paths with spaces / non-ASCII work on Windows
     cv::Mat loadImage(const std::string& pathUtf8) {
@@ -17,7 +35,10 @@ namespace {
         std::vector<uchar> bytes((std::istreambuf_iterator<char>(f)),
             std::istreambuf_iterator<char>());
         if (bytes.empty()) return {};
-        return cv::imdecode(bytes, cv::IMREAD_UNCHANGED);   // empty Mat if not an image
+        cv::Mat img = cv::imdecode(bytes, cv::IMREAD_UNCHANGED);
+        if (img.empty()) return {};
+        if (img.channels() == 4) img = flattenAlpha(img);
+        return img;
     }
 
     std::optional<std::string> tryDecode(const cv::Mat& img) {
