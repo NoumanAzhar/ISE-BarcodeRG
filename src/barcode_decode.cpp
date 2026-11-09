@@ -74,5 +74,24 @@ optional<string> decodeRuns(const vector<int>& runs)
     {
 		return nullopt;
     }
+    string stop;
+    for (int i = 30; i < 37; i++)
+    {
+        int n = (int)lround(runs[i] / moduleWidth);
+        char c;
+        if ((i - 30) % 2 == 0)
+        {
+            c = '1'; //bar
+        }
+        else
+        {
+            c = '0'; //space
+        }
+		stop.append(n, c);
+    }
+    if (stop != "1100011101011")
+    {
+        return nullopt;
+    }
 	return nullopt; // temperory
 }
