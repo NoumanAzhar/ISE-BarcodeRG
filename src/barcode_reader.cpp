@@ -53,5 +53,21 @@ namespace {
 std::optional<std::string> readBarcodeFile(const std::string& path) {
     cv::Mat img = loadImage(path);
     if (img.empty()) return std::nullopt;
-    return tryDecode(img);
+
+    // Attempt 1: image as it is
+    if (auto r = tryDecode(img)) return r;
+
+    // Attempt 2: upside-down barcode
+    cv::Mat flipped;
+    cv::rotate(img, flipped, cv::ROTATE_180);
+    if (auto r = tryDecode(flipped)) return r;
+
+    // Attempt 3: other scales (tiny images enlarged, huge ones shrunk)
+    for (double s : {2.0, 0.5}) {
+        if (img.cols * s > 4000 || img.cols * s < 100) continue;
+        cv::Mat scaled;
+        cv::resize(img, scaled, cv::Size(), s, s, s > 1 ? cv::INTER_LINEAR : cv::INTER_AREA);
+        if (auto r = tryDecode(scaled)) return r;
+    }
+    return std::nullopt;   // never guess: a wrong number is worse than "not found"
 }
