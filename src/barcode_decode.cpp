@@ -93,5 +93,19 @@ optional<string> decodeRuns(const vector<int>& runs)
     {
         return nullopt;
     }
-	return nullopt; // temperory
+
+    string digits;
+    for (int i = 1; i <= 3; i++)
+    {
+        if (symbols[i] > 99)
+        {
+            return nullopt; // has to be 2 digt
+        }
+        if (symbols[i] < 10)
+        {
+            digits += "0"; // add a leading zero to make it 2 digits
+        }
+        digits += to_string(symbols[i]);
+    }
+    return digits;
 }
