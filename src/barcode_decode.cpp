@@ -45,6 +45,10 @@ optional<std::string> decodeRuns(const vector<int>& runs)
 	double moduleWidth = estimateModuleWidth(runs);
 	if (moduleWidth <= 0.0) {
 		return nullopt; // Invalid module width
-	}
+	} 
+    if (runs.size() < 37)
+    {
+        return nullopt;
+    }
 	return nullopt; // temperory
 }
