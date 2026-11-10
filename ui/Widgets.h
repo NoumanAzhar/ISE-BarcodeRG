@@ -39,6 +39,7 @@ QFrame* makeCard(QWidget* parent = nullptr);
 // ---------------------------------------------------------------------------
 // Small painted icon (no image files needed): a barcode on a rounded tile.
 class IconWidget : public QWidget {
+    Q_OBJECT
 public:
     enum Kind { Logo, Generate, Scan };
     IconWidget(Kind kind, int size, QWidget* parent = nullptr);
