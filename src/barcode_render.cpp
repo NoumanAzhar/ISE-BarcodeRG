@@ -2,7 +2,7 @@
 
 using namespace std;
 
-cv::Mat renderBarcode(const std::string& modules, int moduleW = 3, int height = 100)
+cv::Mat renderBarcode(const std::string& modules, int moduleW, int height)
 {
     if (modules.empty())
         return cv::Mat();
