@@ -47,6 +47,43 @@ int main(int argc, char** argv) {
         check(readImg(img, tmp) == d, "roundtrip " + d);
     }
 
+    // 4. Variants of one barcode (also saved as sample test images)
+    const std::string D = "123456";
+    cv::Mat base = renderBarcode(encodeCode128C(D), 3, 100);
+    auto variant = [&](const std::string& name, const cv::Mat& img, bool expectRead) {
+        cv::imwrite((dir / (name + ".png")).string(), img);
+        auto r = readBarcodeFile((dir / (name + ".png")).string());
+        check(expectRead ? (r && *r == D) : !r, name);
+        };
+    variant("clean", base, true);
+
+    cv::Mat up, down, flip, blur, noisy, border;
+    cv::resize(base, up, cv::Size(), 2, 2, cv::INTER_NEAREST);
+    cv::resize(base, down, cv::Size(), 0.5, 0.5, cv::INTER_AREA);
+    cv::rotate(base, flip, cv::ROTATE_180);
+    cv::GaussianBlur(base, blur, cv::Size(3, 3), 0);
+    cv::Mat n(base.size(), CV_8SC1);
+    cv::randn(n, 0, 12);
+    cv::add(base, n, noisy, cv::noArray(), CV_8U);
+    cv::copyMakeBorder(base, border, 60, 60, 80, 80, cv::BORDER_CONSTANT, 255);
+    variant("scaled_2x", up, true);
+    variant("scaled_half", down, true);
+    variant("upside_down", flip, true);
+    variant("blurred", blur, true);
+    variant("noisy", noisy, true);
+    variant("big_border", border, true);
+
+    // 5. Must NOT be read
+    variant("blank", cv::Mat(100, 300, CV_8UC1, cv::Scalar(255)), false);
+    cv::Mat text(100, 300, CV_8UC1, cv::Scalar(255));
+    cv::putText(text, "HELLO", { 10, 60 }, cv::FONT_HERSHEY_SIMPLEX, 1.5, 0, 3);
+    variant("text_only", text, false);
+
+    { std::ofstream f(dir / "fake.png"); f << "not an image"; }
+    check(!readBarcodeFile((dir / "fake.png").string()), "fake png");
+    check(!readBarcodeFile("does/not/exist.png"), "missing file");
+    check(!readBarcodeFile(""), "empty path");
+
     fs::remove(tmp);
     std::cout << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;
