@@ -1,3 +1,4 @@
+
 #include "MenuPage.h"
 
 #include "Widgets.h"
@@ -6,6 +7,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QFont>
 
 #include <opencv2/core/version.hpp>
 
@@ -60,18 +62,30 @@ MenuPage::MenuPage(QWidget* parent)
     root->addLayout(cards);
     root->addSpacing(26);
 
-    // ---- secondary actions ----
-    auto* aboutBtn = new QPushButton("About", this);
-    aboutBtn->setObjectName("ghost");
-    aboutBtn->setCursor(Qt::PointingHandCursor);
+    // ---- Exit action ----
 
-    auto* exitBtn = new QPushButton("Exit", this);
+    // ---- Prominent Exit action ----
+    auto* exitBtn = new QPushButton("EXIT", this);
     exitBtn->setObjectName("ghost");
     exitBtn->setCursor(Qt::PointingHandCursor);
 
+    exitBtn->setFixedSize(220, 80);
+    exitBtn->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+
+    QFont exitFont = exitBtn->font();
+    exitFont.setBold(true);
+    exitFont.setPointSize(16);
+    exitBtn->setFont(exitFont);
+
+    exitBtn->setStyleSheet(
+        "font-size: 16px;"
+        "font-weight: bold;"
+        "padding: 12px 28px;"
+        "border-width: 2px;"
+    );
+
     auto* links = new QHBoxLayout;
     links->addStretch(1);
-    links->addWidget(aboutBtn);
     links->addWidget(exitBtn);
     links->addStretch(1);
     root->addLayout(links);
@@ -80,9 +94,9 @@ MenuPage::MenuPage(QWidget* parent)
 
     auto* footer = new QLabel(
         QString("Increment 1  %1  Code 128  %1  Qt %2  %1  OpenCV %3")
-            .arg(kMiddleDot)
-            .arg(QString::fromLatin1(qVersion()))
-            .arg(QString::fromLatin1(CV_VERSION)),
+        .arg(kMiddleDot)
+        .arg(QString::fromLatin1(qVersion()))
+        .arg(QString::fromLatin1(CV_VERSION)),
         this);
     footer->setObjectName("footer");
     footer->setAlignment(Qt::AlignCenter);
@@ -90,6 +104,5 @@ MenuPage::MenuPage(QWidget* parent)
 
     connect(generateCard, &ActionCard::clicked, this, &MenuPage::generateRequested);
     connect(readCard, &ActionCard::clicked, this, &MenuPage::readRequested);
-    connect(aboutBtn, &QPushButton::clicked, this, &MenuPage::aboutRequested);
     connect(exitBtn, &QPushButton::clicked, this, &MenuPage::exitRequested);
 }

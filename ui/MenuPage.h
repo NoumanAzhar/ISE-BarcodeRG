@@ -2,7 +2,6 @@
 
 #include <QWidget>
 
-// Main menu: two big cards (Generate / Read) plus About and Exit.
 class MenuPage : public QWidget {
     Q_OBJECT
 public:
@@ -11,6 +10,5 @@ public:
 signals:
     void generateRequested();
     void readRequested();
-    void aboutRequested();
     void exitRequested();
 };

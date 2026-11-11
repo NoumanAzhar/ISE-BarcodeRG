@@ -97,7 +97,6 @@ MainWindow::MainWindow(QWidget* parent)
     // ---- navigation ----
     connect(m_menu, &MenuPage::generateRequested, this, [this]() { showPage(m_generate); });
     connect(m_menu, &MenuPage::readRequested, this, [this]() { showPage(m_read); });
-    connect(m_menu, &MenuPage::aboutRequested, this, [this]() { showPage(m_about); });
     connect(m_menu, &MenuPage::exitRequested, this, &QWidget::close);
 
     connect(m_generate, &GeneratePage::backRequested, this, [this]() { showPage(m_menu); });
