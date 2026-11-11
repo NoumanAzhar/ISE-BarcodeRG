@@ -12,6 +12,7 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QStyle>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -121,10 +122,13 @@ Banner::Banner(QWidget* parent)
     setObjectName("banner");
     setWordWrap(true);
     setProperty("kind", QString("info"));
+    m_timer = new QTimer(this);
+    m_timer->setSingleShot(true);
+    connect(m_timer, &QTimer::timeout, this, &Banner::clearMessage);
     hide();
 }
 
-void Banner::showMessage(const QString& text, Kind kind)
+void Banner::showMessage(const QString& text, Kind kind, int timeoutMs)
 {
     QString k = "info";
     if (kind == Success)
@@ -136,10 +140,18 @@ void Banner::showMessage(const QString& text, Kind kind)
     repolish(this);
     setText(text);
     show();
+
+    if (timeoutMs > 0) {
+        m_timer->start(timeoutMs);
+    } else {
+        m_timer->stop();
+    }
 }
 
 void Banner::clearMessage()
 {
+    if (m_timer)
+        m_timer->stop();
     clear();
     hide();
 }
@@ -224,8 +236,10 @@ void ActionCard::mousePressEvent(QMouseEvent* event)
 
 void ActionCard::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton && rect().contains(event->position().toPoint()))
+    if (event->button() == Qt::LeftButton && rect().contains(event->position().toPoint())) {
+        clearFocus();
         emit clicked();
+    }
     QFrame::mouseReleaseEvent(event);
 }
 

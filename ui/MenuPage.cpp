@@ -9,8 +9,6 @@
 #include <QVBoxLayout>
 #include <QFont>
 
-#include <opencv2/core/version.hpp>
-
 MenuPage::MenuPage(QWidget* parent)
     : QWidget(parent)
 {
@@ -92,17 +90,14 @@ MenuPage::MenuPage(QWidget* parent)
 
     root->addStretch(2);
 
-    auto* footer = new QLabel(
-        QString("Increment 1  %1  Code 128  %1  Qt %2  %1  OpenCV %3")
-        .arg(kMiddleDot)
-        .arg(QString::fromLatin1(qVersion()))
-        .arg(QString::fromLatin1(CV_VERSION)),
-        this);
-    footer->setObjectName("footer");
-    footer->setAlignment(Qt::AlignCenter);
-    root->addWidget(footer);
-
     connect(generateCard, &ActionCard::clicked, this, &MenuPage::generateRequested);
     connect(readCard, &ActionCard::clicked, this, &MenuPage::readRequested);
     connect(exitBtn, &QPushButton::clicked, this, &MenuPage::exitRequested);
+}
+
+void MenuPage::clearFocusState()
+{
+    for (auto* widget : findChildren<QWidget*>()) {
+        widget->clearFocus();
+    }
 }
