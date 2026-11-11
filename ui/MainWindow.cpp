@@ -97,7 +97,6 @@ MainWindow::MainWindow(QWidget* parent)
     // ---- navigation ----
     connect(m_menu, &MenuPage::generateRequested, this, [this]() { showPage(m_generate); });
     connect(m_menu, &MenuPage::readRequested, this, [this]() { showPage(m_read); });
-    connect(m_menu, &MenuPage::aboutRequested, this, [this]() { showPage(m_about); });
     connect(m_menu, &MenuPage::exitRequested, this, &QWidget::close);
 
     connect(m_generate, &GeneratePage::backRequested, this, [this]() { showPage(m_menu); });
@@ -124,6 +123,12 @@ void MainWindow::showPage(QWidget* page)
 {
     if (m_stack->currentWidget() == page)
         return;
+
+    // Clear previous previews when returning to the main menu.
+    if (page == m_menu) {
+        m_generate->clearPreview();
+        m_read->clearPage();
+    }
 
     m_stack->setCurrentWidget(page);
     fadeIn(page);
