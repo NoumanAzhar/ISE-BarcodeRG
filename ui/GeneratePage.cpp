@@ -104,8 +104,7 @@ GeneratePage::GeneratePage(QWidget* parent)
 
     auto* header = new PageHeader(
         "Generate barcode",
-        "Type a 6-digit number (the first digit cannot be 0). The barcode is "
-        "generated instantly and shown as a preview. You can save it manually.",
+        "The barcode gets generated instantly and shown as a preview. You can save it manually.",
         this);
     connect(header, &PageHeader::backClicked, this, &GeneratePage::backRequested);
     root->addWidget(header);
@@ -123,7 +122,7 @@ GeneratePage::GeneratePage(QWidget* parent)
     fieldLabel->setObjectName("fieldLabel");
 
     m_input = new PersistentPlaceholderLineEdit(left);
-    m_input->setPlaceholderText("e.g. 483920");
+    //m_input->setPlaceholderText("e.g. 483920");
     m_input->setMaxLength(6);
     m_input->setAlignment(Qt::AlignCenter);
     m_input->setClearButtonEnabled(true);
@@ -154,8 +153,8 @@ GeneratePage::GeneratePage(QWidget* parent)
     buttonRow->addWidget(m_randomBtn);
 
     auto* note = new QLabel(
-        "Format: Code 128, Set C. Six digits become three symbols, plus a start "
-        "symbol, a checksum and a stop symbol.",
+        "Format: Code 128, Set C. Six digits "/*become three symbols, plus a start "
+        "symbol, a checksum and a stop symbol."*/,
         left);
     note->setObjectName("muted");
     note->setWordWrap(true);
@@ -188,12 +187,12 @@ GeneratePage::GeneratePage(QWidget* parent)
     m_preview->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     m_preview->installEventFilter(this);
 
-    m_digitsLabel = new QLabel(paper);
-    m_digitsLabel->setObjectName("paperDigits");
-    m_digitsLabel->setAlignment(Qt::AlignCenter);
+    //m_digitsLabel = new QLabel(paper);
+    //m_digitsLabel->setObjectName("paperDigits");
+    //m_digitsLabel->setAlignment(Qt::AlignCenter);
 
     paperLayout->addWidget(m_preview, 1);
-    paperLayout->addWidget(m_digitsLabel);
+    //paperLayout->addWidget(m_digitsLabel);
 
     m_banner = new Banner(right);
 
@@ -256,7 +255,7 @@ void GeneratePage::clearPreview()
     m_preview->clear();
     m_preview->setText("Your barcode will appear here");
 
-    m_digitsLabel->clear();
+    //m_digitsLabel->clear();
     m_path->clear();
     m_banner->clearMessage();
 
@@ -333,7 +332,7 @@ void GeneratePage::generate()
     }
 
     m_currentDigits = digits;
-    m_digitsLabel->setText(spaced(digits));
+    //m_digitsLabel->setText(spaced(digits));
     updatePreview();
 
     m_saveBtn->setEnabled(true);

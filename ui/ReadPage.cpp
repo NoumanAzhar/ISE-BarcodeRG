@@ -39,8 +39,7 @@ ReadPage::ReadPage(QWidget* parent)
 
     auto* header = new PageHeader(
         "Read barcode",
-        "Drop a barcode image into the box, or click it to browse. The number is decoded "
-        "automatically.",
+        "Drop a barcode image into the box, or click it to browse.",
         this);
     connect(header, &PageHeader::backClicked, this, &ReadPage::backRequested);
     root->addWidget(header);
@@ -133,7 +132,7 @@ ReadPage::ReadPage(QWidget* parent)
     resultButtons->addWidget(m_clearBtn);
 
     auto* note = new QLabel(
-        "Format: Code 128, Set C. Six digits are decoded from the barcode pattern.",
+        "Format: Code 128, Set C. Six digits. ",
         resultCard);
     note->setObjectName("muted");
     note->setWordWrap(true);
