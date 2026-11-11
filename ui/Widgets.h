@@ -51,14 +51,20 @@ private:
     Kind m_kind;
 };
 
+class QTimer;
+
 // ---------------------------------------------------------------------------
 // Coloured message bar; hidden until showMessage() is called.
 class Banner : public QLabel {
+    Q_OBJECT
 public:
     enum Kind { Info, Success, Error };
     explicit Banner(QWidget* parent = nullptr);
-    void showMessage(const QString& text, Kind kind);
+    void showMessage(const QString& text, Kind kind, int timeoutMs = 2000);
     void clearMessage();
+
+private:
+    QTimer* m_timer = nullptr;
 };
 
 // ---------------------------------------------------------------------------
