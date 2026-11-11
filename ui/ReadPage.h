@@ -15,6 +15,7 @@ class ReadPage : public QWidget {
     Q_OBJECT
 public:
     explicit ReadPage(QWidget* parent = nullptr);
+    void clearPage();
 
 signals:
     void backRequested();

@@ -124,6 +124,12 @@ void MainWindow::showPage(QWidget* page)
     if (m_stack->currentWidget() == page)
         return;
 
+    // Clear previous previews when returning to the main menu.
+    if (page == m_menu) {
+        m_generate->clearPreview();
+        m_read->clearPage();
+    }
+
     m_stack->setCurrentWidget(page);
     fadeIn(page);
 

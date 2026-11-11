@@ -223,6 +223,23 @@ void GeneratePage::focusInput()
     m_input->selectAll();
 }
 
+void GeneratePage::clearPreview()
+{
+    m_image = QImage();
+    m_currentDigits.clear();
+
+    m_preview->clear();
+    m_preview->setText("Your barcode will appear here");
+
+    m_digitsLabel->clear();
+    m_path->clear();
+    m_banner->clearMessage();
+
+    m_saveBtn->setEnabled(false);
+    m_copyBtn->setEnabled(false);
+    m_folderBtn->setEnabled(false);
+}
+
 bool GeneratePage::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_preview && event->type() == QEvent::Resize)

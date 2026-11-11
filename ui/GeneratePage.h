@@ -16,7 +16,7 @@ public:
     explicit GeneratePage(QWidget* parent = nullptr);
 
     void focusInput();
-
+    void clearPreview();
     // Folder where generated barcodes are saved automatically (next to the app).
     static QString outputDir();
 

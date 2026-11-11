@@ -293,6 +293,12 @@ void ReadPage::clearAll()
     showImage();
 }
 
+void ReadPage::clearPage()
+{
+    clearAll();
+    m_caption->clear();
+}
+
 void ReadPage::addToHistory(const QString& value, const QString& fileName)
 {
     auto* item = new QListWidgetItem(value + "   " + kMiddleDot + "   " + fileName);
