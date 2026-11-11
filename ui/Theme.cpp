@@ -5,12 +5,12 @@ namespace {
 bool sDark = true;
 
 const Theme::Colors kDarkColors = {
-    QColor("#0e1116"),   // bg
-    QColor("#161b22"),   // surface
-    QColor("#1e2530"),   // surface2
-    QColor("#2b3544"),   // border
-    QColor("#e6edf3"),   // text
-    QColor("#8b98a9"),   // muted
+    QColor("#0a0a0a"),   // bg
+    QColor("#141414"),   // surface
+    QColor("#1c1c1c"),   // surface2
+    QColor("#2e2e2e"),   // border
+    QColor("#ededed"),   // text
+    QColor("#9a9a9a"),   // muted
     QColor("#4f8cff"),   // accent
     QColor("#6b9eff"),   // accentHover
     QColor("#f85149"),   // danger
