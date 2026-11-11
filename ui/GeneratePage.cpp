@@ -19,6 +19,7 @@
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -225,6 +226,10 @@ void GeneratePage::focusInput()
 
 void GeneratePage::clearPreview()
 {
+    if (m_input) {
+        m_input->clear();
+    }
+
     m_image = QImage();
     m_currentDigits.clear();
 
@@ -285,7 +290,6 @@ void GeneratePage::randomNumber()
 {
     const int value = QRandomGenerator::global()->bounded(100000, 1000000);   // 100000..999999
     m_input->setText(QString::number(value));
-    generate();
 }
 
 void GeneratePage::generate()
@@ -319,9 +323,17 @@ void GeneratePage::generate()
     // Show preview only. Saving is available through the Save as button.
     m_path->clear();
 
+    // Clear the hint text after generating
+    m_hint->clear();
+    m_hint->setProperty("state", QString());
+    repolish(m_hint);
+
     m_banner->showMessage(
-        "Barcode generated successfully. Preview is ready.",
+        "Barcode generated successfully.",
         Banner::Success);
+
+    // Auto-hide the banner after 2 seconds
+    QTimer::singleShot(2000, m_banner, &Banner::clearMessage);
 }
 
 void GeneratePage::updatePreview()

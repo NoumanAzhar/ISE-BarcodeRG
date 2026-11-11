@@ -92,7 +92,6 @@ QFrame#card { background: @surface; border: 1px solid @border; border-radius: 16
 QFrame#paper { background: #ffffff; border: none; border-radius: 12px; }
 QFrame#actionCard { background: @surface; border: 1px solid @border; border-radius: 18px; }
 QFrame#actionCard:hover { background: @surface2; border: 1px solid @accent; }
-QFrame#actionCard:focus { border: 2px solid @accent; }
 QFrame#dropZone { background: @surface; border: 2px dashed @border; border-radius: 18px; }
 QFrame#dropZone:hover { border: 2px dashed @accent; }
 QFrame#dropZone[dragging="true"] { background: @accent_bg; border: 2px dashed @accent; }

@@ -224,8 +224,10 @@ void ActionCard::mousePressEvent(QMouseEvent* event)
 
 void ActionCard::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton && rect().contains(event->position().toPoint()))
+    if (event->button() == Qt::LeftButton && rect().contains(event->position().toPoint())) {
+        clearFocus();
         emit clicked();
+    }
     QFrame::mouseReleaseEvent(event);
 }
 
