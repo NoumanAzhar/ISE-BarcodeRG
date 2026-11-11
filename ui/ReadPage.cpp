@@ -12,11 +12,19 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QIcon>
+#include <QImage>
 #include <QLabel>
+#include <QPainter>
+#include <QPen>
 #include <QPushButton>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QTimer>
 #include <QVBoxLayout>
+
+#include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
 
 namespace {
 
@@ -24,6 +32,31 @@ bool isImageSuffix(const QString& suffix)
 {
     static const QStringList kSuffixes = { "png", "jpg", "jpeg", "bmp", "tif", "tiff" };
     return kSuffixes.contains(suffix.toLower());
+}
+
+// Small camera icon, painted so no image file is needed. Neutral grey so it
+// is visible on both the light and the dark theme.
+QIcon makeCameraIcon(int size)
+{
+    const qreal dpr = 2.0;
+    QPixmap pm(int(size * dpr), int(size * dpr));
+    pm.setDevicePixelRatio(dpr);
+    pm.fill(Qt::transparent);
+
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QColor c(0x8a, 0x94, 0xa6);
+    p.setPen(QPen(c, 1.6));
+    p.setBrush(Qt::NoBrush);
+
+    const qreal s = size;
+    p.drawRoundedRect(QRectF(s * 0.08, s * 0.28, s * 0.84, s * 0.58), 3, 3);  // body
+    p.setBrush(c);
+    p.drawRoundedRect(QRectF(s * 0.30, s * 0.16, s * 0.26, s * 0.14), 2, 2);  // top bump
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QPointF(s * 0.5, s * 0.57), s * 0.19, s * 0.19);            // lens
+    p.end();
+    return QIcon(pm);
 }
 
 } // namespace
@@ -74,13 +107,26 @@ ReadPage::ReadPage(QWidget* parent)
     browseBtn->setObjectName("primary");
     browseBtn->setCursor(Qt::PointingHandCursor);
 
+    m_cameraBtn = new QPushButton(QString("Use camera"), m_placeholder);
+    m_cameraBtn->setIcon(makeCameraIcon(18));
+    m_cameraBtn->setIconSize(QSize(18, 18));
+    m_cameraBtn->setCursor(Qt::PointingHandCursor);
+    m_cameraBtn->setToolTip("Scan a barcode with the webcam");
+
+    auto* phButtons = new QHBoxLayout;
+    phButtons->setSpacing(10);
+    phButtons->addStretch(1);
+    phButtons->addWidget(browseBtn);
+    phButtons->addWidget(m_cameraBtn);
+    phButtons->addStretch(1);
+
     phLayout->addStretch(1);
     phLayout->addWidget(phIcon, 0, Qt::AlignHCenter);
     phLayout->addSpacing(6);
     phLayout->addWidget(phTitle);
     phLayout->addWidget(phText);
     phLayout->addSpacing(10);
-    phLayout->addWidget(browseBtn, 0, Qt::AlignHCenter);
+    phLayout->addLayout(phButtons);
     phLayout->addStretch(1);
 
     // Shown once an image is loaded.
@@ -159,8 +205,15 @@ ReadPage::ReadPage(QWidget* parent)
     connect(m_copyBtn, &QPushButton::clicked, this, [this]() { copyValue(m_lastValue); });
     connect(m_clearBtn, &QPushButton::clicked, this, &ReadPage::clearAll);
 
+    m_cameraTimer = new QTimer(this);
+    m_cameraTimer->setInterval(33);                    // ~30 frames per second
+    connect(m_cameraTimer, &QTimer::timeout, this, &ReadPage::onCameraTick);
+    connect(m_cameraBtn, &QPushButton::clicked, this, &ReadPage::startCamera);
+
     clearAll();
 }
+
+ReadPage::~ReadPage() = default;   // here, so cv::VideoCapture is a complete type
 
 bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 {
@@ -171,6 +224,14 @@ bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 
 void ReadPage::browse()
 {
+    if (m_cap) {                    // clicking the picture while scanning = cancel
+        stopCamera();
+        m_caption->setText("Camera stopped   " + QString(kMiddleDot)
+                           + "   click or drop to choose another");
+        m_banner->showMessage("Camera stopped.", Banner::Info);
+        return;
+    }
+
     QString start = GeneratePage::outputDir();     // where our own barcodes are saved
     if (!QDir(start).exists())
         start = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
@@ -184,6 +245,7 @@ void ReadPage::browse()
 
 void ReadPage::loadFile(const QString& path)
 {
+    stopCamera();
     const QFileInfo info(path);
     if (!info.isFile() || !isImageSuffix(info.suffix())) {
         m_banner->showMessage("Please choose an image file (PNG, JPG or BMP).", Banner::Error);
@@ -263,6 +325,7 @@ void ReadPage::copyValue(const QString& value)
 
 void ReadPage::clearAll()
 {
+    stopCamera();
     m_pixmap = QPixmap();
     m_image->clear();
     m_fileName->clear();
@@ -275,4 +338,95 @@ void ReadPage::clearPage()
 {
     clearAll();
     m_caption->clear();
+}
+
+void ReadPage::hideEvent(QHideEvent* event)
+{
+    stopCamera();                   // never keep the webcam on in the background
+    QWidget::hideEvent(event);
+}
+
+// ------------------------------------------------------------------- webcam
+
+void ReadPage::startCamera()
+{
+    if (m_cap)
+        return;
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);   // opening can take a moment
+    auto cap = std::make_unique<cv::VideoCapture>();
+#ifdef _WIN32
+    bool ok = cap->open(0, cv::CAP_DSHOW);             // opens much faster than the default
+    if (!ok)
+        ok = cap->open(0);
+#else
+    const bool ok = cap->open(0);
+#endif
+    QApplication::restoreOverrideCursor();
+
+    if (!ok || !cap->isOpened()) {
+        m_banner->showMessage("No camera was found, or it is being used by another program.",
+                              Banner::Error, 4000);
+        return;
+    }
+
+    cap->set(cv::CAP_PROP_FRAME_WIDTH, 1280);          // more pixels = more reliable bars
+    cap->set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+
+    clearAll();                                        // also resets any old result
+    m_cap = std::move(cap);
+    m_frameCount = 0;
+    m_caption->setText("Hold the barcode flat in front of the camera   " + QString(kMiddleDot)
+                       + "   click to cancel");
+    m_cameraTimer->start();
+}
+
+void ReadPage::stopCamera()
+{
+    if (m_cameraTimer)
+        m_cameraTimer->stop();
+    m_cap.reset();
+}
+
+void ReadPage::onCameraTick()
+{
+    if (!m_cap)
+        return;
+
+    cv::Mat frame;
+    if (!m_cap->read(frame) || frame.empty()) {
+        stopCamera();
+        m_banner->showMessage("The camera stopped sending pictures.", Banner::Error, 4000);
+        return;
+    }
+    if (frame.type() != CV_8UC3) {                     // QImage below expects BGR, 8 bit
+        cv::Mat bgr;
+        if (frame.channels() == 4)
+            cv::cvtColor(frame, bgr, cv::COLOR_BGRA2BGR);
+        else if (frame.channels() == 1)
+            cv::cvtColor(frame, bgr, cv::COLOR_GRAY2BGR);
+        else
+            return;
+        frame = bgr;
+    }
+
+    // live preview
+    const QImage img(frame.data, frame.cols, frame.rows, int(frame.step),
+                     QImage::Format_BGR888);
+    m_pixmap = QPixmap::fromImage(img);                // copies the pixels
+    showImage();
+
+    // try to read every 3rd frame (keeps the preview smooth)
+    if (++m_frameCount % 3 != 0)
+        return;
+
+    const std::optional<std::string> result = readBarcodeFrame(frame);
+    if (result.has_value() && !result->empty()) {
+        stopCamera();
+        m_caption->setText("Captured from camera   " + QString(kMiddleDot)
+                           + "   click or drop to choose another");
+        m_fileName->setText("From camera");
+        showResult(QString::fromStdString(*result));
+        m_banner->showMessage("Barcode read successfully.", Banner::Success);
+    }
 }

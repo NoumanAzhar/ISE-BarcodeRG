@@ -3,6 +3,7 @@
 #include "barcode_decode.h"   // Member 4: decodeRuns
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -48,26 +49,68 @@ namespace {
         return decodeRuns(runs);                            // Member 4
     }
 
+    // Tries the image as it is, upside down and at other scales.
+    std::optional<std::string> decodeImage(const cv::Mat& img) {
+        // Attempt 1: image as it is
+        if (auto r = tryDecode(img)) return r;
+
+        // Attempt 2: upside-down barcode
+        cv::Mat flipped;
+        cv::rotate(img, flipped, cv::ROTATE_180);
+        if (auto r = tryDecode(flipped)) return r;
+
+        // Attempt 3: other scales (tiny images enlarged, huge ones shrunk)
+        for (double s : {2.0, 0.5}) {
+            if (img.cols * s > 4000 || img.cols * s < 100) continue;
+            cv::Mat scaled;
+            cv::resize(img, scaled, cv::Size(), s, s, s > 1 ? cv::INTER_LINEAR : cv::INTER_AREA);
+            if (auto r = tryDecode(scaled)) return r;
+        }
+        return std::nullopt;   // never guess: a wrong number is worse than "not found"
+    }
+
 } // namespace
 
 std::optional<std::string> readBarcodeFile(const std::string& path) {
     cv::Mat img = loadImage(path);
     if (img.empty()) return std::nullopt;
+    return decodeImage(img);
+}
 
-    // Attempt 1: image as it is
-    if (auto r = tryDecode(img)) return r;
+std::optional<std::string> readBarcodeFrame(const cv::Mat& frame) {
+    if (frame.empty()) return std::nullopt;
 
-    // Attempt 2: upside-down barcode
-    cv::Mat flipped;
-    cv::rotate(img, flipped, cv::ROTATE_180);
-    if (auto r = tryDecode(flipped)) return r;
+    // 1. The whole frame (works when the bar code fills the picture).
+    if (auto r = decodeImage(frame)) return r;
 
-    // Attempt 3: other scales (tiny images enlarged, huge ones shrunk)
-    for (double s : {2.0, 0.5}) {
-        if (img.cols * s > 4000 || img.cols * s < 100) continue;
-        cv::Mat scaled;
-        cv::resize(img, scaled, cv::Size(), s, s, s > 1 ? cv::INTER_LINEAR : cv::INTER_AREA);
-        if (auto r = tryDecode(scaled)) return r;
+    // 2. Camera pictures: extractRuns() only looks at the middle row, so cut
+    //    thin strips at several heights (each strip's middle row is the line
+    //    we want to scan). Averaging the strip's rows removes camera noise.
+    //    Narrower centred crops help when there is background at the sides.
+    cv::Mat gray;
+    if (frame.channels() == 3)      cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+    else if (frame.channels() == 4) cv::cvtColor(frame, gray, cv::COLOR_BGRA2GRAY);
+    else                            gray = frame;
+
+    for (double widthFrac : {1.0, 0.7, 0.5}) {
+        const int w = std::max(1, int(gray.cols * widthFrac));
+        const int x0 = (gray.cols - w) / 2;
+        for (double heightFrac : {0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8}) {
+            const int y = int(gray.rows * heightFrac);
+            const int y0 = std::max(0, y - 3);
+            const int y1 = std::min(gray.rows, y + 4);
+            if (y1 <= y0) continue;
+
+            cv::Mat avg, strip;
+            cv::reduce(gray(cv::Range(y0, y1), cv::Range(x0, x0 + w)), avg, 0,
+                       cv::REDUCE_AVG, CV_8U);
+            cv::repeat(avg, 3, 1, strip);       // 3 rows -> middle row is row 1
+
+            if (auto r = tryDecode(strip)) return r;
+            cv::Mat flipped;
+            cv::rotate(strip, flipped, cv::ROTATE_180);
+            if (auto r = tryDecode(flipped)) return r;
+        }
     }
-    return std::nullopt;   // never guess: a wrong number is worse than "not found"
+    return std::nullopt;
 }
