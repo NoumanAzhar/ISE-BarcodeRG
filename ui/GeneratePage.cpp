@@ -83,8 +83,8 @@ GeneratePage::GeneratePage(QWidget* parent)
 
     auto* header = new PageHeader(
         "Generate barcode",
-        "Type a 6-digit number (the first digit cannot be 0). The barcode is drawn "
-        "instantly and saved as an image.",
+        "Type a 6-digit number (the first digit cannot be 0). The barcode is "
+        "generated instantly and shown as a preview. You can save it manually.",
         this);
     connect(header, &PageHeader::backClicked, this, &GeneratePage::backRequested);
     root->addWidget(header);
@@ -299,19 +299,12 @@ void GeneratePage::generate()
     m_copyBtn->setEnabled(true);
     m_folderBtn->setEnabled(true);
 
-    // Requirement: the barcode must also be saved on disk as an image.
-    QDir().mkpath(outputDir());
-    const QString path = QDir(outputDir()).filePath(digits + ".png");
-    if (saveBarcode(img, toNativePath(path))) {
-        m_path->setText("Saved to  " + QDir::toNativeSeparators(path));
-        m_banner->showMessage(QString("Barcode generated and saved as %1.png").arg(digits),
-                              Banner::Success);
-    } else {
-        m_path->clear();
-        m_banner->showMessage("The barcode was drawn but could not be saved automatically. "
-                              "Use \"Save as\" to choose another place.",
-                              Banner::Error);
-    }
+    // Show preview only. Saving is available through the Save as button.
+    m_path->clear();
+
+    m_banner->showMessage(
+        "Barcode generated successfully. Preview is ready.",
+        Banner::Success);
 }
 
 void GeneratePage::updatePreview()
