@@ -13,7 +13,6 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QListWidget>
 #include <QPushButton>
 #include <QStandardPaths>
 #include <QStringList>
@@ -26,8 +25,6 @@ bool isImageSuffix(const QString& suffix)
     static const QStringList kSuffixes = { "png", "jpg", "jpeg", "bmp", "tif", "tiff" };
     return kSuffixes.contains(suffix.toLower());
 }
-
-const int kMaxHistory = 12;
 
 } // namespace
 
@@ -105,13 +102,10 @@ ReadPage::ReadPage(QWidget* parent)
     dropLayout->addWidget(m_caption);
 
     // ------------------------------------------------------- right: results
-    auto* rightColumn = new QVBoxLayout;
-    rightColumn->setSpacing(16);
-
     QFrame* resultCard = makeCard(this);
     auto* resultLayout = new QVBoxLayout(resultCard);
-    resultLayout->setContentsMargins(26, 22, 26, 22);
-    resultLayout->setSpacing(8);
+    resultLayout->setContentsMargins(28, 26, 28, 24);
+    resultLayout->setSpacing(10);
 
     auto* resultLabel = new QLabel("Decoded number", resultCard);
     resultLabel->setObjectName("fieldLabel");
@@ -138,36 +132,25 @@ ReadPage::ReadPage(QWidget* parent)
     resultButtons->addWidget(m_copyBtn, 1);
     resultButtons->addWidget(m_clearBtn);
 
+    auto* note = new QLabel(
+        "Format: Code 128, Set C. Six digits are decoded from the barcode pattern.",
+        resultCard);
+    note->setObjectName("muted");
+    note->setWordWrap(true);
+
     resultLayout->addWidget(resultLabel);
+    resultLayout->addStretch(1);
     resultLayout->addWidget(m_resultValue);
     resultLayout->addWidget(m_fileName);
+    resultLayout->addSpacing(6);
     resultLayout->addWidget(m_banner);
-    resultLayout->addSpacing(4);
+    resultLayout->addSpacing(10);
     resultLayout->addLayout(resultButtons);
+    resultLayout->addStretch(1);
+    resultLayout->addWidget(note);
 
-    QFrame* historyCard = makeCard(this);
-    auto* historyLayout = new QVBoxLayout(historyCard);
-    historyLayout->setContentsMargins(26, 20, 26, 18);
-    historyLayout->setSpacing(8);
-
-    auto* historyLabel = new QLabel("Recent reads", historyCard);
-    historyLabel->setObjectName("fieldLabel");
-
-    m_history = new QListWidget(historyCard);
-    m_history->setToolTip("Click a number to display it. Double-click to copy it.");
-
-    auto* historyHint = new QLabel("Click to display a number. Double-click to copy it.", historyCard);
-    historyHint->setObjectName("muted");
-
-    historyLayout->addWidget(historyLabel);
-    historyLayout->addWidget(m_history, 1);
-    historyLayout->addWidget(historyHint);
-
-    rightColumn->addWidget(resultCard);
-    rightColumn->addWidget(historyCard, 1);
-
-    body->addWidget(m_drop, 5);
-    body->addLayout(rightColumn, 4);
+    body->addWidget(m_drop, 1);
+    body->addWidget(resultCard, 1);
     root->addLayout(body, 1);
 
     // ------------------------------------------------------------- behaviour
@@ -176,18 +159,6 @@ ReadPage::ReadPage(QWidget* parent)
     connect(browseBtn, &QPushButton::clicked, this, &ReadPage::browse);
     connect(m_copyBtn, &QPushButton::clicked, this, [this]() { copyValue(m_lastValue); });
     connect(m_clearBtn, &QPushButton::clicked, this, &ReadPage::clearAll);
-    connect(m_history, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
-        const QString value = item->data(Qt::UserRole).toString();
-        const QString fileName = item->data(Qt::UserRole + 1).toString();
-
-        showResult(value);
-        m_fileName->setText(fileName);
-        m_banner->showMessage("Selected from recent reads.", Banner::Info);
-        });
-
-    connect(m_history, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        copyValue(item->data(Qt::UserRole).toString());
-        });
 
     clearAll();
 }
@@ -247,7 +218,6 @@ void ReadPage::decode(const QString& path)
         const QString value = QString::fromStdString(*result);
         showResult(value);
         m_banner->showMessage("Barcode read successfully.", Banner::Success);
-        addToHistory(value, fileName);
     } else {
         clearResult();
         m_banner->showMessage("No valid Code 128 barcode was found in this image. Try a "
@@ -306,15 +276,4 @@ void ReadPage::clearPage()
 {
     clearAll();
     m_caption->clear();
-}
-
-void ReadPage::addToHistory(const QString& value, const QString& fileName)
-{
-    auto* item = new QListWidgetItem(value + "   " + kMiddleDot + "   " + fileName);
-    item->setData(Qt::UserRole, value);
-    item->setData(Qt::UserRole + 1, fileName);
-    m_history->insertItem(0, item);
-
-    while (m_history->count() > kMaxHistory)
-        delete m_history->takeItem(m_history->count() - 1);
 }

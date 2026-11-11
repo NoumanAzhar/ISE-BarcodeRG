@@ -331,9 +331,6 @@ void GeneratePage::generate()
     m_banner->showMessage(
         "Barcode generated successfully.",
         Banner::Success);
-
-    // Auto-hide the banner after 2 seconds
-    QTimer::singleShot(2000, m_banner, &Banner::clearMessage);
 }
 
 void GeneratePage::updatePreview()

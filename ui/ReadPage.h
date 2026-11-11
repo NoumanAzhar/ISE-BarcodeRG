@@ -7,7 +7,6 @@
 class Banner;
 class DropZone;
 class QLabel;
-class QListWidget;
 class QPushButton;
 
 // Page 2: drop or choose a barcode image -> the 6-digit number is decoded and shown.
@@ -32,7 +31,6 @@ private:
     void clearResult();
     void copyValue(const QString& value);
     void clearAll();
-    void addToHistory(const QString& value, const QString& fileName);
 
     DropZone* m_drop = nullptr;
     QWidget* m_placeholder = nullptr;
@@ -44,7 +42,6 @@ private:
     Banner* m_banner = nullptr;
     QPushButton* m_copyBtn = nullptr;
     QPushButton* m_clearBtn = nullptr;
-    QListWidget* m_history = nullptr;
 
     QPixmap m_pixmap;       // the image currently shown
     QString m_lastValue;    // the last decoded number
