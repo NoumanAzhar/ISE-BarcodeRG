@@ -154,9 +154,9 @@ ReadPage::ReadPage(QWidget* parent)
     historyLabel->setObjectName("fieldLabel");
 
     m_history = new QListWidget(historyCard);
-    m_history->setToolTip("Double-click a number to copy it");
+    m_history->setToolTip("Click a number to display it. Double-click to copy it.");
 
-    auto* historyHint = new QLabel("Double-click a number to copy it.", historyCard);
+    auto* historyHint = new QLabel("Click to display a number. Double-click to copy it.", historyCard);
     historyHint->setObjectName("muted");
 
     historyLayout->addWidget(historyLabel);
@@ -176,9 +176,18 @@ ReadPage::ReadPage(QWidget* parent)
     connect(browseBtn, &QPushButton::clicked, this, &ReadPage::browse);
     connect(m_copyBtn, &QPushButton::clicked, this, [this]() { copyValue(m_lastValue); });
     connect(m_clearBtn, &QPushButton::clicked, this, &ReadPage::clearAll);
+    connect(m_history, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
+        const QString value = item->data(Qt::UserRole).toString();
+        const QString fileName = item->data(Qt::UserRole + 1).toString();
+
+        showResult(value);
+        m_fileName->setText(fileName);
+        m_banner->showMessage("Selected from recent reads.", Banner::Info);
+        });
+
     connect(m_history, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
         copyValue(item->data(Qt::UserRole).toString());
-    });
+        });
 
     clearAll();
 }
@@ -303,6 +312,7 @@ void ReadPage::addToHistory(const QString& value, const QString& fileName)
 {
     auto* item = new QListWidgetItem(value + "   " + kMiddleDot + "   " + fileName);
     item->setData(Qt::UserRole, value);
+    item->setData(Qt::UserRole + 1, fileName);
     m_history->insertItem(0, item);
 
     while (m_history->count() > kMaxHistory)
