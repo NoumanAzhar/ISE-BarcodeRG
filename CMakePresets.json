@@ -5,6 +5,10 @@
     "generator": "Ninja",
     "binaryDir": "${sourceDir}/out/build",
     "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-    "architecture": { "value": "x64", "strategy": "external" }
-  }]
+    "architecture": {
+      "value": "x64",
+      "strategy": "external"
+    }, 
+    "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}
+    }]
 }
