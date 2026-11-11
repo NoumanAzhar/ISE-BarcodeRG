@@ -137,9 +137,6 @@ void MainWindow::showPage(QWidget* page)
 
     m_stack->setCurrentWidget(page);
     fadeIn(page);
-
-    if (page == m_generate)
-        m_generate->focusInput();
 }
 
 void MainWindow::applyTheme(bool dark)

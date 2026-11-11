@@ -1,5 +1,6 @@
 #include "GeneratePage.h"
 
+#include "Theme.h"
 #include "Widgets.h"
 #include "barcode_render.h"
 #include "code128.h"
@@ -15,6 +16,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPainter>
 #include <QPushButton>
 #include <QRandomGenerator>
 #include <QRegularExpression>
@@ -24,6 +26,24 @@
 #include <QVBoxLayout>
 
 namespace {
+
+// QLineEdit that always shows placeholder text whenever empty, even while focused.
+class PersistentPlaceholderLineEdit : public QLineEdit {
+public:
+    using QLineEdit::QLineEdit;
+
+protected:
+    void paintEvent(QPaintEvent* event) override
+    {
+        QLineEdit::paintEvent(event);
+        if (text().isEmpty() && !placeholderText().isEmpty() && hasFocus()) {
+            QPainter p(this);
+            p.setPen(Theme::colors().muted);
+            p.setFont(font());
+            p.drawText(rect(), alignment(), placeholderText());
+        }
+    }
+};
 
 // Size of one module (the thinnest bar) in pixels, and bar height, used for the
 // image that is saved to disk. Bigger bars are easier for the reader.
@@ -102,7 +122,7 @@ GeneratePage::GeneratePage(QWidget* parent)
     auto* fieldLabel = new QLabel("Number to encode", left);
     fieldLabel->setObjectName("fieldLabel");
 
-    m_input = new QLineEdit(left);
+    m_input = new PersistentPlaceholderLineEdit(left);
     m_input->setPlaceholderText("e.g. 483920");
     m_input->setMaxLength(6);
     m_input->setAlignment(Qt::AlignCenter);
@@ -271,7 +291,7 @@ void GeneratePage::onTextChanged(const QString& text)
                             : QString("%1 more digits to go.").arg(6 - n);
     } else if (valid) {
         state = "valid";
-        hint = "Looks good. Press Enter or click Generate.";
+        hint = "Looks good. Click Generate.";
     } else {
         state = "invalid";
         hint = "Enter exactly 6 digits.";

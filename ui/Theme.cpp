@@ -101,6 +101,7 @@ QLineEdit {
     background: @surface2; border: 1px solid @border; border-radius: 12px;
     padding: 12px 14px; font-size: 26px; font-weight: 600;
     selection-background-color: @accent; selection-color: #ffffff;
+    placeholder-text-color: @muted;
 }
 QLineEdit:focus { border: 1px solid @accent; }
 QLineEdit[state="invalid"] { border: 1px solid @danger; }
