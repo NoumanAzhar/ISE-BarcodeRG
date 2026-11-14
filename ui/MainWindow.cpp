@@ -1,6 +1,5 @@
 #include "MainWindow.h"
 
-#include "AboutPage.h"
 #include "GeneratePage.h"
 #include "MenuPage.h"
 #include "ReadPage.h"
@@ -87,11 +86,9 @@ MainWindow::MainWindow(QWidget* parent)
     m_menu = new MenuPage(m_stack);
     m_generate = new GeneratePage(m_stack);
     m_read = new ReadPage(m_stack);
-    m_about = new AboutPage(m_stack);
     m_stack->addWidget(m_menu);
     m_stack->addWidget(m_generate);
     m_stack->addWidget(m_read);
-    m_stack->addWidget(m_about);
     layout->addWidget(m_stack, 1);
 
     // ---- navigation ----
@@ -101,7 +98,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(m_generate, &GeneratePage::backRequested, this, [this]() { showPage(m_menu); });
     connect(m_read, &ReadPage::backRequested, this, [this]() { showPage(m_menu); });
-    connect(m_about, &AboutPage::backRequested, this, [this]() { showPage(m_menu); });
     connect(brandBtn, &QPushButton::clicked, this, [this]() { showPage(m_menu); });
 
     // Esc goes back to the menu from any other page.
