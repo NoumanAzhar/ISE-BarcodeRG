@@ -2,7 +2,6 @@
 
 #include <QMainWindow>
 
-class AboutPage;
 class GeneratePage;
 class MenuPage;
 class QPushButton;
@@ -23,6 +22,5 @@ private:
     MenuPage* m_menu = nullptr;
     GeneratePage* m_generate = nullptr;
     ReadPage* m_read = nullptr;
-    AboutPage* m_about = nullptr;
     QPushButton* m_themeBtn = nullptr;
 };
