@@ -414,9 +414,11 @@ void ReadPage::onCameraTick()
     if (newScan) {
         m_lastScanId = snap.scanId;
         const CameraScanResult& res = snap.scan;
-        m_box = QRect(res.box.x, res.box.y, res.box.width, res.box.height);
+        const bool hasValue = res.value.has_value() && !res.value->empty();
+        const cv::Rect& shown = (hasValue && res.readBox.area() > 0) ? res.readBox : res.box;
+        m_box = QRect(shown.x, shown.y, shown.width, shown.height);   // amber: candidate / read area
 
-        if (res.value.has_value() && !res.value->empty()) {
+        if (hasValue) {
             m_missCount = 0;
             const QString value = QString::fromStdString(*res.value);
             if (value == m_pendingValue)
@@ -427,7 +429,10 @@ void ReadPage::onCameraTick()
             }
 
             if (m_pendingHits >= 2) {                  // same number twice = accept
-                drawBox(pm, m_box, QColor(0x2e, 0xcc, 0x71));
+                // green only around the area the number was really read from
+                // (nothing if it came from the strip sweep, where no area is known)
+                drawBox(pm, QRect(res.readBox.x, res.readBox.y, res.readBox.width, res.readBox.height),
+                        QColor(0x2e, 0xcc, 0x71));
                 m_pixmap = pm;
                 stopCamera();
                 showImage();

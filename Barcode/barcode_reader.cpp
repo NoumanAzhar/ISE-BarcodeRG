@@ -344,10 +344,12 @@ namespace {
         const cv::Rect bounds(0, 0, gray.cols, gray.rows);
 
         for (const Region& reg : findBarcodeRegions(gray)) {
+            // area of this region in the original (not turned) frame
+            const cv::Rect frameBox = turned90
+                ? cv::Rect(reg.box.y, gray.cols - reg.box.x - reg.box.width, reg.box.height, reg.box.width)
+                : reg.box;
             if (out.box.area() == 0) {
-                out.box = turned90
-                    ? cv::Rect(reg.box.y, gray.cols - reg.box.x - reg.box.width, reg.box.height, reg.box.width)
-                    : reg.box;
+                out.box = frameBox;     // first region found, only used for aiming
             }
 
             // work on a window around the region (cheaper than the whole frame)
@@ -380,6 +382,7 @@ namespace {
                     if (x1 - x0 < 20 || y1 - y0 < 5) continue;
                     if (auto r = readCrop(rot(cv::Range(y0, y1), cv::Range(x0, x1)))) {
                         out.value = r;
+                        out.readBox = frameBox;     // this is the region the number was read from
                         return true;
                     }
                 }

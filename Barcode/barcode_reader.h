@@ -18,7 +18,8 @@ std::optional<std::string> readBarcodeFile(const std::string& path);
 // was found, so the UI can draw a frame around it.
 struct CameraScanResult {
     std::optional<std::string> value;   // 6 digits, empty if not read in this frame
-    cv::Rect box;                       // bar code area in frame coordinates (empty = none found)
+    cv::Rect box;                       // area that looks like a bar code, only for aiming (empty = none found)
+    cv::Rect readBox;                   // area the number was read from (empty = not read, or read from the strip sweep)
 };
 
 // Camera reading. It first finds WHERE the bar code is, then reads it:
