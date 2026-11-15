@@ -7,7 +7,7 @@
 
 #include <memory>
 
-namespace cv { class VideoCapture; }
+class CameraReader;
 
 class Banner;
 class DropZone;
@@ -61,9 +61,9 @@ private:
     QPixmap m_pixmap;       // the image currently shown
     QString m_lastValue;    // the last decoded number
 
-    std::unique_ptr<cv::VideoCapture> m_cap;   // non-null while the camera is on
+    std::unique_ptr<CameraReader> m_reader;    // non-null while the camera is on (barcode_reader.h)
     QTimer* m_cameraTimer = nullptr;
-    int m_frameCount = 0;
+    int m_lastScanId = 0;       // last scan result already handled
 
     QRect m_box;                // where the last scan found a barcode (frame coordinates)
     QString m_pendingValue;     // a number is only accepted after two matching reads

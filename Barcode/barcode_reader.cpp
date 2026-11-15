@@ -1,9 +1,12 @@
 #include "barcode_reader.h"
 #include "image_prep.h"       // Member 3: extractRuns
 #include "barcode_decode.h"   // Member 4: decodeRuns
+#include "code128.h"           // patternToSymbol (symbol table is built before the threads start)
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/videoio.hpp>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -68,7 +71,7 @@ namespace {
             cv::resize(img, scaled, cv::Size(), s, s, s > 1 ? cv::INTER_LINEAR : cv::INTER_AREA);
             if (auto r = tryDecode(scaled)) return r;
         }
-        return std::nullopt;   // never guess: a wrong number is worse than "not found"
+        return std::nullopt;  // return null if not found
     }
 
     // Camera reading
@@ -83,8 +86,7 @@ namespace {
     }
 
     // One scan line: a 1 x W row of gray values (already averaged over a few image rows)
-    // extractRuns() thresholds with Otsu on whatever it gets
-    // so we offer it a few versions of the line and try both reading directions
+    // extractRuns() thresholds with Otsu on whatever it gets, so we offer it a few versions of the line and try both reading directions.
 
     std::optional<std::string> readScanLine(const cv::Mat& line) {
         for (double scale : {1.0, 2.0}) {
@@ -189,6 +191,7 @@ namespace {
     }
 
     // A candidate area of the frame that may hold a bar code.
+
     struct Region {
         cv::Point2f center;     // frame coordinates
         float length = 0;       // long side = reading direction
@@ -259,8 +262,7 @@ namespace {
         const cv::Rect bounds(0, 0, gray.cols, gray.rows);
         std::vector<Region> regions;
         for (const auto& o : order) {
-            const cv::Rect r(stats.at<int>(o.second, cv::CC_STAT_LEFT), stats.at<int>(o.second, cv::CC_STAT_TOP),
-                             stats.at<int>(o.second, cv::CC_STAT_WIDTH), stats.at<int>(o.second, cv::CC_STAT_HEIGHT));
+            const cv::Rect r(stats.at<int>(o.second, cv::CC_STAT_LEFT), stats.at<int>(o.second, cv::CC_STAT_TOP), stats.at<int>(o.second, cv::CC_STAT_WIDTH), stats.at<int>(o.second, cv::CC_STAT_HEIGHT));
             std::vector<cv::Point> cellPoints;
             cv::findNonZero(labels(r) == o.second, cellPoints);
             std::vector<cv::Point2f> pts;
@@ -287,9 +289,9 @@ namespace {
         return regions;
     }
 
-    // Brightness of a rotated copy of the window along the middle band:
-    // the sum of all left-right changes of the band's average line. When the
-    // bars are exactly vertical the rows reinforce each other, so this is largest.
+    // Brightness of a rotated copy of the window along the middle band: the sum of all left-right changes of the band's average line. 
+    // When the bars are exactly vertical the rows reinforce each other, so this is largest.
+
     double lineContrast(const cv::Mat& win, cv::Point2f c, double angle, float length, float thickness) {
         cv::Mat rot;
         cv::warpAffine(win, rot, cv::getRotationMatrix2D(c, angle, 1.0), win.size(),
@@ -310,6 +312,7 @@ namespace {
 
     // Tilt of the bar code in degrees: try angles and keep the one that makes
     // the bars sharpest (coarse steps first, then fine steps around the best).
+
     double estimateTilt(const cv::Mat& win, cv::Point2f c, float length, float thickness) {
         // a half-size copy is enough for this and 4 times faster
         const double k = length > 300.f ? 0.5 : 1.0;
@@ -336,6 +339,7 @@ namespace {
     // Finds regions in `gray`, straightens each one and tries to read it.
     // `turned90` = `gray` is the frame rotated 90 deg clockwise (bar code that
     // stands upright); the reported box is mapped back to the original frame.
+
     bool readRegions(const cv::Mat& gray, bool turned90, CameraScanResult& out) {
         const cv::Rect bounds(0, 0, gray.cols, gray.rows);
 
@@ -437,4 +441,148 @@ CameraScanResult scanCameraFrame(const cv::Mat& frame) {
 
 std::optional<std::string> readBarcodeFrame(const cv::Mat& frame) {
     return scanCameraFrame(frame).value;
+}
+
+// ---------------------------------------------------------------------------
+// CameraReader
+
+CameraReader::~CameraReader()
+{
+    stop();
+}
+
+void CameraReader::start(int cameraIndex)
+{
+    if (m_captureThread.joinable())
+        return;                                   // already running
+
+    patternToSymbol("");                          // builds the lookup table here, not inside a thread
+
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_frame.release();
+        m_frameId = m_scannedId = m_polledId = 0;
+        m_scan = CameraScanResult();
+        m_scanId = 0;
+        m_failed = false;
+        m_error.clear();
+    }
+    m_stop = false;
+    m_captureThread = std::thread(&CameraReader::captureLoop, this, cameraIndex);
+    m_scanThread = std::thread(&CameraReader::scanLoop, this);
+}
+
+void CameraReader::stop()
+{
+    m_stop = true;
+    m_newFrame.notify_all();
+    if (m_captureThread.joinable())
+        m_captureThread.join();
+    if (m_scanThread.joinable())
+        m_scanThread.join();
+}
+
+CameraReader::Snapshot CameraReader::poll()
+{
+    Snapshot s;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    s.frame = m_frame;                            // shares the pixels, they are never modified
+    if (m_frameId != m_polledId) {
+        s.newFrame = true;
+        m_polledId = m_frameId;
+    }
+    s.scan = m_scan;
+    s.scanId = m_scanId;
+    s.failed = m_failed;
+    s.error = m_error;
+    return s;
+}
+
+void CameraReader::captureLoop(int cameraIndex)
+{
+    auto fail = [this](const char* message) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_failed = true;
+        m_error = message;
+    };
+
+    try {
+        cv::VideoCapture cap;
+        bool ok = false;
+#ifdef _WIN32
+        ok = cap.open(cameraIndex, cv::CAP_DSHOW);        // opens much faster than the default
+#endif
+        if (!ok)
+            ok = cap.open(cameraIndex);
+        if (!ok || !cap.isOpened()) {
+            fail("No camera was found, or it is being used by another program.");
+            return;
+        }
+
+        // MJPG first: most webcams then deliver 720p at a full 30 fps with less noise
+        cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+        cap.set(cv::CAP_PROP_FRAME_WIDTH, 1280);          // more pixels = more reliable bars
+        cap.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+        cap.set(cv::CAP_PROP_AUTOFOCUS, 1);               // a sharp picture matters most for thin bars
+        cap.set(cv::CAP_PROP_BUFFERSIZE, 1);              // no old frames waiting in a queue
+
+        cv::Mat frame;
+        int bad = 0;
+        while (!m_stop) {
+            if (!cap.read(frame) || frame.empty()) {
+                if (++bad > 100) {
+                    fail("The camera stopped sending pictures.");
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
+            bad = 0;
+
+            cv::Mat bgr;                                   // the UI expects 8-bit BGR
+            if (frame.type() == CV_8UC3)
+                bgr = frame.clone();
+            else if (frame.channels() == 4)
+                cv::cvtColor(frame, bgr, cv::COLOR_BGRA2BGR);
+            else if (frame.channels() == 1)
+                cv::cvtColor(frame, bgr, cv::COLOR_GRAY2BGR);
+            else
+                continue;
+
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                m_frame = bgr;                             // replaces the header: old pixels stay valid for readers
+                ++m_frameId;
+            }
+            m_newFrame.notify_one();
+        }
+        cap.release();
+    } catch (const cv::Exception&) {
+        fail("The camera reported an error.");
+    }
+}
+
+void CameraReader::scanLoop()
+{
+    while (true) {
+        cv::Mat work;
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+            m_newFrame.wait(lock, [this]() { return m_stop || m_frameId != m_scannedId; });
+            if (m_stop)
+                return;
+            work = m_frame;
+            m_scannedId = m_frameId;
+        }
+
+        CameraScanResult result;
+        try {
+            result = scanCameraFrame(work);
+        } catch (...) {
+        }
+
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_scan = result;
+        ++m_scanId;
+    }
 }
