@@ -24,9 +24,6 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
-#include <opencv2/imgproc.hpp>
-#include <opencv2/videoio.hpp>
-
 namespace {
 
 bool isImageSuffix(const QString& suffix)
@@ -226,7 +223,7 @@ ReadPage::ReadPage(QWidget* parent)
     clearAll();
 }
 
-ReadPage::~ReadPage() = default;   // here, so cv::VideoCapture is a complete type
+ReadPage::~ReadPage() = default;   // here, so CameraReader is a complete type
 
 bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 {
@@ -237,7 +234,7 @@ bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 
 void ReadPage::browse()
 {
-    if (m_cap) {                    // clicking the picture while scanning = cancel
+    if (m_reader) {                 // clicking the picture while scanning = cancel
         stopCamera();
         m_caption->setText("Camera stopped   " + QString(kMiddleDot)
                            + "   click or drop to choose another");
@@ -363,41 +360,20 @@ void ReadPage::hideEvent(QHideEvent* event)
 
 void ReadPage::startCamera()
 {
-    if (m_cap)
+    if (m_reader)
         return;
-
-    QApplication::setOverrideCursor(Qt::WaitCursor);   // opening can take a moment
-    auto cap = std::make_unique<cv::VideoCapture>();
-#ifdef _WIN32
-    bool ok = cap->open(0, cv::CAP_DSHOW);             // opens much faster than the default
-    if (!ok)
-        ok = cap->open(0);
-#else
-    const bool ok = cap->open(0);
-#endif
-    QApplication::restoreOverrideCursor();
-
-    if (!ok || !cap->isOpened()) {
-        m_banner->showMessage("No camera was found, or it is being used by another program.",
-                              Banner::Error, 4000);
-        return;
-    }
-
-    // MJPG first: most webcams then deliver 720p at a full 30 fps with less noise
-    cap->set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
-    cap->set(cv::CAP_PROP_FRAME_WIDTH, 1280);          // more pixels = more reliable bars
-    cap->set(cv::CAP_PROP_FRAME_HEIGHT, 720);
-    cap->set(cv::CAP_PROP_AUTOFOCUS, 1);               // a sharp picture matters most for thin bars
 
     clearAll();                                        // also resets any old result
-    m_cap = std::move(cap);
-    m_frameCount = 0;
+    m_reader = std::make_unique<CameraReader>();
+    m_reader->start(0);                                // opens the camera in the background
+    m_lastScanId = 0;
     m_box = QRect();
     m_pendingValue.clear();
     m_pendingHits = 0;
     m_missCount = 0;
     m_caption->setText("Hold the barcode flat in front of the camera   " + QString(kMiddleDot)
                        + "   click to cancel");
+    m_banner->showMessage("Starting the camera" + QString(kEllipsis), Banner::Info);
     m_cameraTimer->start();
 }
 
@@ -405,39 +381,39 @@ void ReadPage::stopCamera()
 {
     if (m_cameraTimer)
         m_cameraTimer->stop();
-    m_cap.reset();
+    m_reader.reset();
     m_box = QRect();
 }
 
+// Only shows the newest picture and handles a finished scan: the camera and
+// the barcode search run in CameraReader's own threads, so this stays fast.
 void ReadPage::onCameraTick()
 {
-    if (!m_cap)
+    if (!m_reader)
         return;
 
-    cv::Mat frame;
-    if (!m_cap->read(frame) || frame.empty()) {
+    const CameraReader::Snapshot snap = m_reader->poll();
+    if (snap.failed) {
         stopCamera();
-        m_banner->showMessage("The camera stopped sending pictures.", Banner::Error, 4000);
+        m_banner->showMessage(QString::fromStdString(snap.error), Banner::Error, 4000);
         return;
     }
-    if (frame.type() != CV_8UC3) {                     // QImage below expects BGR, 8 bit
-        cv::Mat bgr;
-        if (frame.channels() == 4)
-            cv::cvtColor(frame, bgr, cv::COLOR_BGRA2BGR);
-        else if (frame.channels() == 1)
-            cv::cvtColor(frame, bgr, cv::COLOR_GRAY2BGR);
-        else
-            return;
-        frame = bgr;
-    }
+    if (snap.frame.empty())                            // camera still starting
+        return;
+    const bool newScan = snap.scanId != m_lastScanId;
+    if (!snap.newFrame && !newScan)                    // nothing new to show
+        return;
 
+    if (m_pixmap.isNull())
+        m_banner->clearMessage();                      // removes "Starting the camera"
+
+    const cv::Mat& frame = snap.frame;                 // 8-bit BGR
     QPixmap pm = QPixmap::fromImage(QImage(frame.data, frame.cols, frame.rows,
                                            int(frame.step), QImage::Format_BGR888));   // copies the pixels
 
-    // Look for a barcode in every 3rd frame (keeps the preview smooth).
-    // The scan also tells where the barcode is, so a frame is drawn around it.
-    if (++m_frameCount % 3 == 0) {
-        const CameraScanResult res = scanCameraFrame(frame);
+    if (newScan) {
+        m_lastScanId = snap.scanId;
+        const CameraScanResult& res = snap.scan;
         m_box = QRect(res.box.x, res.box.y, res.box.width, res.box.height);
 
         if (res.value.has_value() && !res.value->empty()) {
