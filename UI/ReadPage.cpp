@@ -12,10 +12,16 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QColor>
+#include <QIcon>
+#include <QImage>
 #include <QLabel>
+#include <QPainter>
+#include <QPen>
 #include <QPushButton>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -24,6 +30,43 @@ bool isImageSuffix(const QString& suffix)
 {
     static const QStringList kSuffixes = { "png", "jpg", "jpeg", "bmp", "tif", "tiff" };
     return kSuffixes.contains(suffix.toLower());
+}
+
+// Small camera icon, painted so no image file is needed. Neutral grey so it
+// is visible on both the light and the dark theme.
+QIcon makeCameraIcon(int size)
+{
+    const qreal dpr = 2.0;
+    QPixmap pm(int(size * dpr), int(size * dpr));
+    pm.setDevicePixelRatio(dpr);
+    pm.fill(Qt::transparent);
+
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QColor c(0x8a, 0x94, 0xa6);
+    p.setPen(QPen(c, 1.6));
+    p.setBrush(Qt::NoBrush);
+
+    const qreal s = size;
+    p.drawRoundedRect(QRectF(s * 0.08, s * 0.28, s * 0.84, s * 0.58), 3, 3);  // body
+    p.setBrush(c);
+    p.drawRoundedRect(QRectF(s * 0.30, s * 0.16, s * 0.26, s * 0.14), 2, 2);  // top bump
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(QPointF(s * 0.5, s * 0.57), s * 0.19, s * 0.19);            // lens
+    p.end();
+    return QIcon(pm);
+}
+
+// Frame around the barcode on the live picture.
+void drawBox(QPixmap& pm, const QRect& box, const QColor& color)
+{
+    if (box.isEmpty())
+        return;
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(color, qMax(3, pm.width() / 320)));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(box.adjusted(-4, -4, 4, 4));
 }
 
 } // namespace
@@ -74,13 +117,26 @@ ReadPage::ReadPage(QWidget* parent)
     browseBtn->setObjectName("primary");
     browseBtn->setCursor(Qt::PointingHandCursor);
 
+    m_cameraBtn = new QPushButton(QString("Use camera"), m_placeholder);
+    m_cameraBtn->setIcon(makeCameraIcon(18));
+    m_cameraBtn->setIconSize(QSize(18, 18));
+    m_cameraBtn->setCursor(Qt::PointingHandCursor);
+    m_cameraBtn->setToolTip("Scan a barcode with the webcam");
+
+    auto* phButtons = new QHBoxLayout;
+    phButtons->setSpacing(10);
+    phButtons->addStretch(1);
+    phButtons->addWidget(browseBtn);
+    phButtons->addWidget(m_cameraBtn);
+    phButtons->addStretch(1);
+
     phLayout->addStretch(1);
     phLayout->addWidget(phIcon, 0, Qt::AlignHCenter);
     phLayout->addSpacing(6);
     phLayout->addWidget(phTitle);
     phLayout->addWidget(phText);
     phLayout->addSpacing(10);
-    phLayout->addWidget(browseBtn, 0, Qt::AlignHCenter);
+    phLayout->addLayout(phButtons);
     phLayout->addStretch(1);
 
     // Shown once an image is loaded.
@@ -159,8 +215,15 @@ ReadPage::ReadPage(QWidget* parent)
     connect(m_copyBtn, &QPushButton::clicked, this, [this]() { copyValue(m_lastValue); });
     connect(m_clearBtn, &QPushButton::clicked, this, &ReadPage::clearAll);
 
+    m_cameraTimer = new QTimer(this);
+    m_cameraTimer->setInterval(33);                    // ~30 frames per second
+    connect(m_cameraTimer, &QTimer::timeout, this, &ReadPage::onCameraTick);
+    connect(m_cameraBtn, &QPushButton::clicked, this, &ReadPage::startCamera);
+
     clearAll();
 }
+
+ReadPage::~ReadPage() = default;   // here, so CameraReader is a complete type
 
 bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 {
@@ -171,6 +234,14 @@ bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 
 void ReadPage::browse()
 {
+    if (m_reader) {                 // clicking the picture while scanning = cancel
+        stopCamera();
+        m_caption->setText("Camera stopped   " + QString(kMiddleDot)
+                           + "   click or drop to choose another");
+        m_banner->showMessage("Camera stopped.", Banner::Info);
+        return;
+    }
+
     QString start = GeneratePage::outputDir();     // where our own barcodes are saved
     if (!QDir(start).exists())
         start = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
@@ -184,6 +255,7 @@ void ReadPage::browse()
 
 void ReadPage::loadFile(const QString& path)
 {
+    stopCamera();
     const QFileInfo info(path);
     if (!info.isFile() || !isImageSuffix(info.suffix())) {
         m_banner->showMessage("Please choose an image file (PNG, JPG or BMP).", Banner::Error);
@@ -263,6 +335,7 @@ void ReadPage::copyValue(const QString& value)
 
 void ReadPage::clearAll()
 {
+    stopCamera();
     m_pixmap = QPixmap();
     m_image->clear();
     m_fileName->clear();
@@ -275,4 +348,103 @@ void ReadPage::clearPage()
 {
     clearAll();
     m_caption->clear();
+}
+
+void ReadPage::hideEvent(QHideEvent* event)
+{
+    stopCamera();                   // never keep the webcam on in the background
+    QWidget::hideEvent(event);
+}
+
+// ------------------------------------------------------------------- webcam
+
+void ReadPage::startCamera()
+{
+    if (m_reader)
+        return;
+
+    clearAll();                                        // also resets any old result
+    m_reader = std::make_unique<CameraReader>();
+    m_reader->start(0);                                // opens the camera in the background
+    m_lastScanId = 0;
+    m_box = QRect();
+    m_pendingValue.clear();
+    m_pendingHits = 0;
+    m_missCount = 0;
+    m_caption->setText("Hold the barcode flat in front of the camera   " + QString(kMiddleDot)
+                       + "   click to cancel");
+    m_banner->showMessage("Starting the camera" + QString(kEllipsis), Banner::Info);
+    m_cameraTimer->start();
+}
+
+void ReadPage::stopCamera()
+{
+    if (m_cameraTimer)
+        m_cameraTimer->stop();
+    m_reader.reset();
+    m_box = QRect();
+}
+
+// Only shows the newest picture and handles a finished scan: the camera and
+// the barcode search run in CameraReader's own threads, so this stays fast.
+void ReadPage::onCameraTick()
+{
+    if (!m_reader)
+        return;
+
+    const CameraReader::Snapshot snap = m_reader->poll();
+    if (snap.failed) {
+        stopCamera();
+        m_banner->showMessage(QString::fromStdString(snap.error), Banner::Error, 4000);
+        return;
+    }
+    if (snap.frame.empty())                            // camera still starting
+        return;
+    const bool newScan = snap.scanId != m_lastScanId;
+    if (!snap.newFrame && !newScan)                    // nothing new to show
+        return;
+
+    if (m_pixmap.isNull())
+        m_banner->clearMessage();                      // removes "Starting the camera"
+
+    const cv::Mat& frame = snap.frame;                 // 8-bit BGR
+    QPixmap pm = QPixmap::fromImage(QImage(frame.data, frame.cols, frame.rows,
+                                           int(frame.step), QImage::Format_BGR888));   // copies the pixels
+
+    if (newScan) {
+        m_lastScanId = snap.scanId;
+        const CameraScanResult& res = snap.scan;
+        m_box = QRect(res.box.x, res.box.y, res.box.width, res.box.height);
+
+        if (res.value.has_value() && !res.value->empty()) {
+            m_missCount = 0;
+            const QString value = QString::fromStdString(*res.value);
+            if (value == m_pendingValue)
+                ++m_pendingHits;
+            else {
+                m_pendingValue = value;
+                m_pendingHits = 1;
+            }
+
+            if (m_pendingHits >= 2) {                  // same number twice = accept
+                drawBox(pm, m_box, QColor(0x2e, 0xcc, 0x71));
+                m_pixmap = pm;
+                stopCamera();
+                showImage();
+                m_caption->setText("Captured from camera   " + QString(kMiddleDot)
+                                   + "   click or drop to choose another");
+                m_fileName->setText("From camera");
+                showResult(value);
+                m_banner->showMessage("Barcode read successfully.", Banner::Success);
+                return;
+            }
+        } else if (++m_missCount > 4) {                // lost it: forget the candidate
+            m_pendingValue.clear();
+            m_pendingHits = 0;
+        }
+    }
+
+    drawBox(pm, m_box, QColor(0xf5, 0xa6, 0x23));      // amber while still scanning
+    m_pixmap = pm;
+    showImage();
 }
