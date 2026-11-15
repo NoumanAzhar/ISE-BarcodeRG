@@ -7,7 +7,8 @@
 
 // Loads the image at `path`, runs extractRuns() (image_prep.h) and then
 // decodeRuns() (barcode_decode.h), and returns the 6-digit string.
-// Returns std::nullopt if the file cannot be loaded or decoding fails.
+// Returns std::nullopt if the file cannot be loaded or decoding fails
+
 std::optional<std::string> readBarcodeFile(const std::string& path);
 
 // Result of one camera frame: the number (if read) and where the bar code
