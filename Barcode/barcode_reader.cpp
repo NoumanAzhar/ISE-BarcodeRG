@@ -372,9 +372,9 @@ namespace {
                 // exact left/right ends are found per scan line by trimToBars()
                 for (double padFrac : {0.12, 0.04}) {
                     const double pad = std::max(20.0, padFrac * reg.length);
-                    const int x0 = int(std::max(0.0, c.x - reg.length / 2 - pad));
+                    const int x0 = int(std::max<double>(0.0, c.x - reg.length / 2 - pad));
                     const int x1 = int(std::min<double>(rot.cols, c.x + reg.length / 2 + pad));
-                    const int y0 = int(std::max(0.0, c.y - reg.thickness / 2));
+                    const int y0 = int(std::max<double>(0.0, c.y - reg.thickness / 2));
                     const int y1 = int(std::min<double>(rot.rows, c.y + reg.thickness / 2));
                     if (x1 - x0 < 20 || y1 - y0 < 5) continue;
                     if (auto r = readCrop(rot(cv::Range(y0, y1), cv::Range(x0, x1)))) {
