@@ -71,9 +71,7 @@ namespace {
         return std::nullopt;   // never guess: a wrong number is worse than "not found"
     }
 
-    // ------------------------------------------------------------------
     // Camera reading
-    // ------------------------------------------------------------------
 
     cv::Mat toGray(const cv::Mat& frame) {
         cv::Mat gray;
@@ -84,9 +82,10 @@ namespace {
         return gray;
     }
 
-    // One scan line: a 1 x W row of gray values (already averaged over a few
-    // image rows). extractRuns() thresholds with Otsu on whatever it gets, so
-    // we offer it a few versions of the line and try both reading directions.
+    // One scan line: a 1 x W row of gray values (already averaged over a few image rows)
+    // extractRuns() thresholds with Otsu on whatever it gets
+    // so we offer it a few versions of the line and try both reading directions
+
     std::optional<std::string> readScanLine(const cv::Mat& line) {
         for (double scale : {1.0, 2.0}) {
             // stretch narrow lines so thin bars are not rounded away
@@ -122,10 +121,9 @@ namespace {
     }
 
     // Cuts a scan line down to the part that contains the bars.
-    // Bars make many edges close together; a table edge or the border of the
-    // paper makes one lonely edge. So: find the edges, group edges that are
-    // close to each other, keep the biggest group, add a little quiet zone.
+    // Bars make many edges close together; a table edge or the border of the paper makes one lonely edge. So: find the edges, group edges that are close to each other, keep the biggest group, add a little quiet zone.
     // Returns an empty Mat when no group of bar edges is found.
+
     cv::Mat trimToBars(const cv::Mat& line) {
         const int w = line.cols;
         if (w < 32) return {};
@@ -198,10 +196,9 @@ namespace {
         cv::Rect box;           // axis-aligned box, used for drawing
     };
 
-    // Finds areas with many vertical edges: the frame is cut into 8x8 pixel
-    // cells, a cell counts as "bars" when its left-right edge strength is
-    // clearly bigger than its up-down edge strength, and touching cells are
-    // joined into regions. The best 3 regions (by total edge strength) are kept.
+    // Finds areas with many vertical edges: the frame is cut into 8x8 pixel cells, a cell counts as "bars" when its left-right edge strength is clearly bigger than its up-down edge strength
+    // And touching cells are joined into regions. The best 3 regions (by total edge strength) are kept.
+
     std::vector<Region> findBarcodeRegions(const cv::Mat& gray) {
         // Work on at most 640 px width.
         const double sc = gray.cols > 640 ? 640.0 / gray.cols : 1.0;
