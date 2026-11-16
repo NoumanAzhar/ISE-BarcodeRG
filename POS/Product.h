@@ -4,6 +4,8 @@
 #include <vector>
 #include "data_files.h"
 
+using namespace std;
+
 namespace pos {
 
     // ---- Layer 1: model ----
@@ -14,6 +16,43 @@ namespace pos {
         MeasureUnit unit;
         double unitPrice, tax, discount, availableQty;
         std::string barcodeFile;
+        Product()
+        {
+            id = "";
+            barcode = "";
+            acronym = "";
+            name = "";
+            unit = MeasureUnit::Weight;
+            barcodeFile = "";
+            unitPrice = 0.0;
+            tax = 0.0;
+            discount = 0.0;
+            availableQty = 0.0;
+        }
+        Product(string id, string barcode, string acronym, string name, string unit, double unitPrice, double tax,
+            double discount, double availableQty, string barcodeFile)
+        {
+            this->id = id; this->barcode = barcode; this->acronym = acronym; this->name = name; this->barcodeFile = barcodeFile;
+            this->unitPrice = unitPrice; this->tax = tax; this->discount = discount; this->availableQty = availableQty;
+
+            for(int i=0;i<unit.length();i++)
+            {
+                type += static_cast<char>(tolower(static_cast<unsigned char>(unit[i])));
+            }
+
+            if (unit == "count")
+                this->unit = MeasureUnit::Count;
+            else
+                this->unit = MeasureUnit::Weight;
+
+        }
+        Product(string id, string barcode, string acronym, string name, MeasureUnit unit, double unitPrice, double tax,
+            double discount, double availableQty, string barcodeFile)
+        {
+            this->id = id; this->barcode = barcode; this->acronym = acronym; this->name = name; this->barcodeFile = barcodeFile;
+            this->unitPrice = unitPrice; this->tax = tax; this->discount = discount; this->availableQty = availableQty;
+            this->unit = unit;
+        }
     };
 
     // ---- Layer 2: storage interface ----

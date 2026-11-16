@@ -1,18 +1,13 @@
-#include<Product.h>
+#include "Product.h"
 #include<fstream>
-
-using namepsace std;
+#include<string>
+#include<vector>
+using namespace std;
 
 /*
-struct Product {
-	std::string id, barcode, acronym, name;
-	MeasureUnit unit;
-	double unitPrice, tax, discount, availableQty; std::string barcodeFile;
-};
 
+Product.txt file
 
-4. Product.txt file shall have one row for each product. Each row shall have a # as an end of line market.
-Each line shall have following information about the product in the exact order, separated  by a space:
 - product id
 - product barcode
 - product acronym (max 8 characters)
@@ -28,17 +23,6 @@ Each line shall have following information about the product in the exact order,
 
 namespace pos {
 
-    // ---- Layer 1: model ----
-    enum class MeasureUnit { Count, Weight };
-
-    struct Product {
-        std::string id, barcode, acronym, name;
-        MeasureUnit unit;
-        double unitPrice, tax, discount, availableQty;
-        std::string barcodeFile;
-    };
-
-    // ---- Layer 2: storage interface ----
     class IProductRepository {
     public:
         virtual ~IProductRepository() = default;
@@ -53,37 +37,168 @@ namespace pos {
         virtual bool update(const Product& product) = 0;
     };
 
-    // ---- Layer 2: Product.txt implementation ----
-    class FileProductRepository : public IProductRepository {
-    public:
-        explicit FileProductRepository(std::string path);
+    string num2str(double n)
+    {
+        ostringstream out;
+        out << fixed << setprecision(2) << n;
+        return out.str();
+    }
 
-        std::optional<Product> findByBarcode(const std::string& barcode) const override;
-        std::optional<Product> findById(const std::string& id) const override;
-        std::vector<Product> all() const override;
-        bool update(const Product& product) override;
+    Record producttoRecord(const Product& p)
+    {
+        Record r;
+        r.push_back(p.id);
+        r.push_back(p.barcode);
+        r.push_back(p.acronym);
+        r.push_back(p.name);
+        r.push_back(p.unit == MeasureUnit::Count ? "count" : "weight");
+        r.push_back(num2str(p.unitPrice));
+        r.push_back(num2str(p.tax));
+        r.push_back(num2str(p.discount));
+        r.push_back(num2str(p.availableQty));
+        r.push_back(p.barcodeFile);
+        return r;
+    }
 
-        // (added, not in the shared interface) messages about malformed lines
-        // from the most recent read, e.g. "line 3: expected 10 fields".
-        const std::vector<std::string>& warnings() const;
-
+    class FileProductRepository : public IProductRepository
+    {
     private:
         std::string path_;
-        mutable std::vector<std::string> warnings_;  // mutable: all() is const
+    public:
+
+        explicit FileProductRepository(std::string path)
+        {
+            this->path_ = path;
+        }
+
+        double toDouble(const string& text)const
+        {
+            size_t used = 0;
+            double value = stod(text, &used);
+            if (used != text.length())
+                throw invalid_argument("extra characters");
+            return value;
+        }
+
+        optional<Product> makeProduct(const Record& row)const
+        {
+            if (row.size() != 10)
+            {
+                return nullopt;
+            }
+            string id = row[0], barcode = row[1], name = row[3], acronym = row[2], path = row[9];
+            string unit = row[4];
+            for (size_t i = 0; i < unit.length(); i++)
+                unit[i] = static_cast<char>(tolower(static_cast<unsigned char>(unit[i])));
+            if (unit != "count" && unit != "weight")
+            {
+                return nullopt;
+            }
+            double tax, discount, price, quantity;
+            try
+            {
+                price = toDouble(row[5]);
+                tax = toDouble(row[6]);
+                discount = toDouble(row[7]);
+                quantity = toDouble(row[8]);
+            }
+            catch (...)
+            {
+                return nullopt;
+            }
+            MeasureUnit measureUnit =(unit == "count") ? MeasureUnit::Count : MeasureUnit::Weight;
+            return Product(id, barcode, acronym, name, measureUnit, price, tax, discount, quantity, path);
+        }
+
+        optional<Product> findByBarcode(const std::string& barcode) const override
+        {
+            vector<Record> data = readRecords(path_);
+            for (int i = 0; i < data.size(); i++)
+            {
+                if (data[i].size() >= 2)
+                    if ((data[i])[1] == barcode)
+                        return makeProduct(data[i]);
+            }
+            return nullopt;
+        }
+
+        optional<Product> findById(const std::string& id) const override
+        {
+            vector<Record> data = readRecords(path_);
+            for (int i = 0; i < data.size(); i++)
+            {
+
+                if (data[i].size() >= 2)
+                    if ((data[i])[0] == id)
+                        return makeProduct(data[i]);
+            }
+            return nullopt;
+        }
+
+        vector<Product> all() const override
+        {
+            vector<Record> data = readRecords(path_);
+            vector<Product> res;
+            for (int i = 0; i < data.size(); i++)
+            {
+
+                auto p = makeProduct(data[i]);
+                if (p.has_value())
+                    res.push_back(*p);
+            }
+            return res;
+        }
+
+        bool update(const Product& product) override
+        {
+            vector<Record> data = readRecords(path_);
+            for (int i = 0; i < data.size(); i++)
+            {
+                if (!data[i].empty() && data[i][0] == product.id)
+                {
+                    data[i] = producttoRecord(product);
+                    return writeRecords(path_, data);
+                }
+            }
+            return 0;
+        }
     };
 
-    // ---- Layer 3-facing helpers ----
-    class ProductCatalog {
+    class ProductCatalog
+    {
     public:
-        explicit ProductCatalog(const IProductRepository& repo);
+        explicit ProductCatalog(const IProductRepository& repo):repo_(repo){}
+
         // nullopt if the barcode is not exactly kBarcodeDigits digits, or unknown
-        std::optional<Product> lookup(const std::string& barcode) const;
+        optional<Product> lookup(const std::string& barcode) const
+        {
+            if (barcode.length() != (unsigned int)kBarcodeDigits)
+                return nullopt;
+            for (int i = 0; i < barcode.length(); i++)
+            {
+                if (barcode[i] < '0' || barcode[i] > '9')
+                    return nullopt;
+            }
+            return repo_.findByBarcode(barcode);
+        }
 
     private:
         const IProductRepository& repo_;
     };
 
     // Multi-line, human-readable text for the Description button and scan screen.
-    std::string describeProduct(const Product& p);
-
-} // namespace pos
+    string describeProduct(const Product& p)
+    {
+        string text;
+        text += "Name: " + p.name + "\n";
+        text += "Acronym: " + p.acronym + "\n";
+        text += "Product ID: " + p.id + "\n";
+        text += "Barcode: " + (p.barcode == "" ? string("not assigned") : p.barcode) + "\n";
+        text += string("Unit: ") + (p.unit == MeasureUnit::Count ? "count" : "weight") + "\n";
+        text += "Price: PKR " + formatMoney(p.unitPrice) + "\n";
+        text += "Tax (per unit): PKR " + formatMoney(p.tax) + "\n";
+        text += "Discount (per unit): PKR " + formatMoney(p.discount) + "\n";
+        text += "Available: " + formatQuantity(p);
+        return text;
+    }
+}
