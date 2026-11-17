@@ -46,7 +46,8 @@ namespace pos {
     }
 
     AddResult OrderService::addByBarcode(const string& barcode, double quantity) {
-        auto product = products_.findByBarcode(barcode);
+        ProductCatalog catalog(products_);
+        auto product = catalog.lookup(barcode);
         if (!product) return { AddStatus::UnknownBarcode, Product{}, 0 };
 
         const double already = quantityOf(product->id);
