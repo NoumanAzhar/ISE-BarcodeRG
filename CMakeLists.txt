@@ -9,13 +9,10 @@ set(CMAKE_AUTORCC ON)
 find_package(OpenCV REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-# backend: barcode + POS code, no Qt, shared by the app and the tests 
+# backend: barcode + POS code, no Qt, shared by the app and the tests
 file(GLOB BACKEND_SOURCES CONFIGURE_DEPENDS
     Barcode/*.cpp Barcode/*.h
     POS/*.cpp POS/*.h)
-
-# TEMP: Unfinished POS code, exclude it from the backend library for now
-list(FILTER BACKEND_SOURCES EXCLUDE REGEX "/POS/")
 
 add_library(backend STATIC ${BACKEND_SOURCES})
 target_include_directories(backend PUBLIC
@@ -34,6 +31,9 @@ target_include_directories(app PRIVATE
     ${CMAKE_SOURCE_DIR}/UI
     ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(app PRIVATE backend Qt6::Widgets)
+# folder that holds data/ while developing (main.cpp falls back to the .exe folder)
+target_compile_definitions(app PRIVATE
+    "APP_ROOT=\"${CMAKE_SOURCE_DIR}\"")
 
 # tests: one program built from Testing/Test.cpp
 add_executable(Test Testing/Test.cpp)
