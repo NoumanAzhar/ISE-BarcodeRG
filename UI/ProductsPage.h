@@ -42,11 +42,14 @@ private:
     void showSelected();
     void showBarcodeImage();
     void assignBarcodes();
+    void addProduct();
+    void editSelected();
 
     pos::AppServices& m_services;
     std::vector<pos::Product> m_products;
 
     NeuLineEdit* m_search = nullptr;
+    NeuButton* m_addBtn = nullptr;
     QStackedWidget* m_listStack = nullptr;     // 0 = table, 1 = empty text
     QTableWidget* m_table = nullptr;
     QLabel* m_emptyLabel = nullptr;
@@ -55,6 +58,7 @@ private:
     QStackedWidget* m_imageStack = nullptr;    // 0 = barcode on paper, 1 = "No barcode image"
     QLabel* m_image = nullptr;
     Banner* m_banner = nullptr;
+    NeuButton* m_editBtn = nullptr;
 
     QPixmap m_barcodePixmap;
 };

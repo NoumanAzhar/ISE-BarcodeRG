@@ -71,6 +71,9 @@ namespace pos {
         // replaces the product with the same id (stock, barcode, image path);
         // false if the id is not found or the write fails
         virtual bool update(const Product& product) = 0;
+        // appends a new product; if id is empty, assigns next 4-digit sequence id;
+        // returns false if id already exists or write fails
+        virtual bool add(Product& product) = 0;
     };
 
     // ---- Layer 2: Product.txt implementation ----
@@ -82,6 +85,7 @@ namespace pos {
         std::optional<Product> findById(const std::string& id) const override;
         std::vector<Product> all() const override;
         bool update(const Product& product) override;
+        bool add(Product& product) override;
         bool assignIDs();
 
         // (added, not in the shared interface) messages about malformed lines

@@ -4,6 +4,7 @@
 #include "Format.h"
 #include "Neu.h"
 #include "ProductDetailsView.h"
+#include "ProductEditDialog.h"
 #include "Theme.h"
 #include "Widgets.h"
 #include "barcode_assign.h"
@@ -61,10 +62,17 @@ QWidget* ProductsPage::buildListSide()
     auto* side = new QWidget(this);
     auto* layout = new QVBoxLayout(side);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(2);
+    layout->setSpacing(4);
+
+    auto* topLayout = new QHBoxLayout;
+    topLayout->setSpacing(8);
 
     m_search = new NeuLineEdit(side);
     m_search->setPlaceholderText("Search name, acronym or barcode");
+    topLayout->addWidget(m_search, 1);
+
+    m_addBtn = new NeuButton("Add Product", NeuButton::Variant::Primary, side);
+    topLayout->addWidget(m_addBtn);
 
     NeuFrame* well = makeWell();
     auto* wellLayout = new QVBoxLayout(well);
@@ -89,11 +97,13 @@ QWidget* ProductsPage::buildListSide()
     m_listStack->addWidget(m_emptyLabel);        // 1
     wellLayout->addWidget(m_listStack);
 
-    layout->addWidget(m_search);
+    layout->addLayout(topLayout);
     layout->addWidget(well, 1);
 
     connect(m_search, &NeuLineEdit::textChanged, this, &ProductsPage::applyFilter);
     connect(m_table, &QTableWidget::itemSelectionChanged, this, &ProductsPage::showSelected);
+    connect(m_table, &QTableWidget::cellDoubleClicked, this, [this](int, int) { editSelected(); });
+    connect(m_addBtn, &NeuButton::clicked, this, &ProductsPage::addProduct);
     return side;
 }
 
@@ -130,13 +140,23 @@ QWidget* ProductsPage::buildDetailsCard()
 
     m_banner = new Banner(card);
 
+    auto* btnRow = new QHBoxLayout;
+    btnRow->setSpacing(8);
+
+    m_editBtn = new NeuButton("Edit Product", NeuButton::Variant::Normal, card);
+    m_editBtn->setEnabled(false);
+    connect(m_editBtn, &NeuButton::clicked, this, &ProductsPage::editSelected);
+
     auto* assignBtn = new NeuButton("Assign barcodes", NeuButton::Variant::Primary, card);
     connect(assignBtn, &NeuButton::clicked, this, &ProductsPage::assignBarcodes);
+
+    btnRow->addWidget(m_editBtn, 1);
+    btnRow->addWidget(assignBtn, 1);
 
     layout->addWidget(m_details, 1);
     layout->addWidget(m_imageStack);
     layout->addWidget(m_banner);
-    layout->addWidget(assignBtn);
+    layout->addLayout(btnRow);
     return card;
 }
 
@@ -241,7 +261,11 @@ void ProductsPage::showSelected()
     const auto it = std::find_if(m_products.begin(), m_products.end(),
                                  [&id](const pos::Product& p) { return p.id == id; });
 
-    if (id.empty() || it == m_products.end()) {
+    const bool hasValid = (!id.empty() && it != m_products.end());
+    if (m_editBtn)
+        m_editBtn->setEnabled(hasValid);
+
+    if (!hasValid) {
         m_details->showMessage("Select a product");
         m_barcodePixmap = QPixmap();
     } else {
@@ -271,5 +295,34 @@ void ProductsPage::assignBarcodes()
     } else {
         m_banner->showMessage(QString("%1 assigned, %2 kept").arg(report.assigned).arg(report.kept),
                               Banner::Success);
+    }
+}
+
+void ProductsPage::addProduct()
+{
+    ProductEditDialog dialog(m_services, std::nullopt, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        reload();
+        selectById(qs(dialog.savedProductId()));
+        m_banner->showMessage("Product added successfully", Banner::Success);
+    }
+}
+
+void ProductsPage::editSelected()
+{
+    const std::string id = ss(selectedId());
+    if (id.empty())
+        return;
+
+    const auto it = std::find_if(m_products.begin(), m_products.end(),
+                                 [&id](const pos::Product& p) { return p.id == id; });
+    if (it == m_products.end())
+        return;
+
+    ProductEditDialog dialog(m_services, *it, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        reload();
+        selectById(qs(id));
+        m_banner->showMessage("Product updated successfully", Banner::Success);
     }
 }
