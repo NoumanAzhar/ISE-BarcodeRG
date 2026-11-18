@@ -230,16 +230,16 @@ namespace pos {
 	}
 }
 
-bool Is_Valid_Phone(string phone)
-{
-	if ( phone.length() != 11 ) {
+
+bool Is_Valid_Phone(string phone) {
+	if (phone.length() != 11) {
 		return false;
 	}
-	if ( phone [0] != '0' || phone [1] != '3' ) {
+	if (phone[0] != '0' || phone[1] != '3') {
 		return false;
 	}
-	for ( int i = 0; i < phone.length(); i++ ) {
-		if ( isdigit(phone [i]) == false ) {
+	for (int i = 0; i < phone.length(); i++) {
+		if (isdigit(phone[i]) == false) {
 			return false;
 		}
 	}
