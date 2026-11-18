@@ -7,9 +7,8 @@
 namespace
 {
 
-    // The backend reads and writes "data/..." relative to the working directory.
-    // Use the project folder while developing, the folder of the .exe once the
-    // app is deployed.
+    // The backend reads and writes "data/..." relative to the working directory
+
     void selectWorkingDirectory()
     {
         const QString candidates [] = { QStringLiteral(APP_ROOT), QCoreApplication::applicationDirPath() };

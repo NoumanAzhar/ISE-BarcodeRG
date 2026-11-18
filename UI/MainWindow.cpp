@@ -17,6 +17,9 @@
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QVBoxLayout>
+#include<QGuiApplication>
+#include<QScreen>
+#include<QStyle>
 
 namespace {
 
@@ -43,6 +46,10 @@ MainWindow::MainWindow(pos::AppServices& services, QWidget* parent)
     setWindowTitle("BarcodeRG");
     resize(1180, 760);
     setMinimumSize(1000, 660);
+
+    if ( const QScreen* screen = QGuiApplication::primaryScreen() )
+        setGeometry(QStyle::alignedRect(Qt::LeftToRight , Qt::AlignCenter ,
+            size() , screen->availableGeometry()));
 
     {
         IconWidget bigLogo(IconWidget::Logo, 128);

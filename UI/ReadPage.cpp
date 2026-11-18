@@ -186,10 +186,9 @@ bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 
 void ReadPage::setSource(int index)
 {
-    const bool camera = (index == 1);
     if (m_stack)
-        m_stack->setCurrentIndex(camera ? 1 : 0);
-    m_camera->setActive(camera && m_active);
+        m_stack->setCurrentIndex(index == 1 ? 1 : 0);
+    m_camera->setActive(false);
 }
 
 void ReadPage::browse()

@@ -174,7 +174,6 @@ void OrderPage::onActivated()
 {
     m_active = true;
     refreshAll();
-    m_camera->setActive(true);
 }
 
 void OrderPage::onDeactivated()
@@ -284,6 +283,7 @@ void OrderPage::generateBill()
         return;
     }
 
+	const bool cameraWasOn = m_camera->isActive();
     m_camera->setActive(false);
     const CheckoutFlow::Outcome outcome =
         CheckoutFlow(m_services).run(name, m_contact->text().trimmed(), this);
