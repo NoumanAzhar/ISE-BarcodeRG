@@ -1,3 +1,0 @@
-0001|947257|LAYS|Lays|count|50.00|5.00|0.00|86|data/barcodes/947257.png|#
-0002|363988|COCOMO|Cocomo|count|10.00|12.00|13.00|149|data/barcodes/363988.png|#
-0003|373843|7UPDIET|Diet 7up|count|150.00|15.00|5.00|59|data/barcodes/373843.png|#
