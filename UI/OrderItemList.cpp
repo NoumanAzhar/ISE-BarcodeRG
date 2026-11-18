@@ -81,6 +81,20 @@ QString OrderItemList::selectedProductId() const
     return m_selectedId;
 }
 
+void OrderItemList::clearSelection()
+{
+    select(QString());
+}
+
+bool OrderItemList::isOnRow(const QWidget* widget) const
+{
+    for (const Row& row : std::as_const(m_rowWidgets)) {
+        if (row.frame == widget || row.frame->isAncestorOf(widget))
+            return true;
+    }
+    return false;
+}
+
 // ------------------------------------------------------------------ rows
 
 void OrderItemList::clearRows()
@@ -172,7 +186,8 @@ void OrderItemList::addRow(const pos::OrderItem& item, const pos::Product& produ
     showQuantity(id, item.quantity);
     styleRow(id);
 
-    connect(frame, &NeuFrame::clicked, this, [this, id]() { select(id); });
+    connect(frame, &NeuFrame::clicked, this,
+            [this, id]() { select(id == m_selectedId ? QString() : id); });   // click again = unselect
     connect(minus, &NeuButton::clicked, this, [this, id]() { step(id, -1); });
     connect(plus, &NeuButton::clicked, this, [this, id]() { step(id, +1); });
     connect(removeBtn, &NeuButton::clicked, this, [this, id]() { remove(id); });

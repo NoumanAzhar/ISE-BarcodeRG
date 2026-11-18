@@ -175,6 +175,11 @@ void ReadPage::onDeactivated()
     m_camera->setActive(false);
 }
 
+void ReadPage::resetState()
+{
+    clearAll();     // digits, product details, loaded image and messages
+}
+
 bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_image && event->type() == QEvent::Resize)

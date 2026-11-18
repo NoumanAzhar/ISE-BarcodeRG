@@ -25,6 +25,8 @@ public:
     void refresh();                          // rebuild all rows from the draft order
     void pulse(const QString& productId);    // brief highlight of that row (about 600 ms)
     QString selectedProductId() const;       // empty when no row is selected
+    void clearSelection();                   // no row selected
+    bool isOnRow(const QWidget* widget) const;   // true if widget is a row or inside one
 
 signals:
     void changed();                          // quantity edited or item removed: recalculate totals

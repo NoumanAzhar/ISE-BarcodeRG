@@ -26,6 +26,8 @@ public:
     ProductsPage(pos::AppServices& services, QWidget* parent = nullptr);
 
     void onActivated() override;       // reload the list (stock changes after every sale)
+    void onDeactivated() override;
+    void resetState() override;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -61,4 +63,6 @@ private:
     NeuButton* m_editBtn = nullptr;
 
     QPixmap m_barcodePixmap;
+    bool m_active = false;
+    int m_pressedSelectedRow = -1;   // row that was already selected when the mouse went down
 };

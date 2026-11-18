@@ -16,4 +16,5 @@ public:
 
     virtual void onActivated() {}     // the page became visible
     virtual void onDeactivated() {}   // the page is about to be hidden
+    virtual void resetState() {}      // the role is being left: drop typed text, results, selection
 };

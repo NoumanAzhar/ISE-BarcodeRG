@@ -138,6 +138,10 @@ void Workspace::leave()
 {
     if (m_current >= 0)
         m_entries[m_current].page->onDeactivated();
+
+    // Leaving the role: every page starts clean the next time it is entered.
+    for (Entry& entry : m_entries)
+        entry.page->resetState();
 }
 
 #include "Workspace.moc"

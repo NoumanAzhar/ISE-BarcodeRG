@@ -23,6 +23,10 @@ public:
     bool canLeave() override;
     void onActivated() override;
     void onDeactivated() override;
+    void resetState() override;
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     QWidget* buildScanCard();

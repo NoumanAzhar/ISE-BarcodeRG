@@ -9,15 +9,21 @@
 #include "Widgets.h"
 #include "barcode_assign.h"
 
+#include <QAbstractButton>
+#include <QAbstractSlider>
+#include <QApplication>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QItemSelectionModel>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMouseEvent>
 #include <QStackedWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -41,6 +47,18 @@ bool matches(const pos::Product& p, const QString& needle)
     return qs(p.acronym).toLower().contains(needle)
         || qs(p.name).toLower().contains(needle)
         || qs(p.barcode).contains(needle);
+}
+
+// True if the widget (or a parent below `stop`) is a button, text input, scroll bar or
+// table header: clicks there must not count as "empty space".
+bool isOnControl(const QWidget* widget, const QWidget* stop)
+{
+    for (const QWidget* w = widget; w && w != stop; w = w->parentWidget()) {
+        if (qobject_cast<const QAbstractButton*>(w) || qobject_cast<const QLineEdit*>(w)
+            || qobject_cast<const QAbstractSlider*>(w) || qobject_cast<const QHeaderView*>(w))
+            return true;
+    }
+    return false;
 }
 
 } // namespace
@@ -102,7 +120,10 @@ QWidget* ProductsPage::buildListSide()
 
     connect(m_search, &NeuLineEdit::textChanged, this, &ProductsPage::applyFilter);
     connect(m_table, &QTableWidget::itemSelectionChanged, this, &ProductsPage::showSelected);
-    connect(m_table, &QTableWidget::cellDoubleClicked, this, [this](int, int) { editSelected(); });
+    connect(m_table, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        m_table->selectRow(row);         // the first click of a double click may have unselected it
+        editSelected();
+    });
     connect(m_addBtn, &NeuButton::clicked, this, &ProductsPage::addProduct);
     return side;
 }
@@ -164,6 +185,8 @@ QWidget* ProductsPage::buildDetailsCard()
 
 void ProductsPage::onActivated()
 {
+    m_active = true;
+    qApp->installEventFilter(this);      // to unselect when empty space is clicked
     reload();
 
     const size_t bad = m_services.products().warnings().size();
@@ -174,10 +197,51 @@ void ProductsPage::onActivated()
         m_banner->clearMessage();
 }
 
+void ProductsPage::onDeactivated()
+{
+    m_active = false;
+    qApp->removeEventFilter(this);
+}
+
+void ProductsPage::resetState()
+{
+    m_search->clear();
+    selectById(QString());
+    m_banner->clearMessage();
+}
+
 bool ProductsPage::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_image && event->type() == QEvent::Resize)
         showBarcodeImage();
+
+    const QEvent::Type type = event->type();
+    if (m_active && (type == QEvent::MouseButtonPress || type == QEvent::MouseButtonRelease)
+        && watched->isWidgetType()) {
+        const auto* widget = static_cast<const QWidget*>(watched);
+        const auto* mouse = static_cast<const QMouseEvent*>(event);
+
+        if (mouse->button() == Qt::LeftButton && widget->window() == window()) {
+            if (widget == m_table->viewport()) {
+                // Click on the selected row again = unselect; click below the rows = unselect.
+                const QModelIndex index = m_table->indexAt(mouse->position().toPoint());
+                if (type == QEvent::MouseButtonPress) {
+                    const QModelIndexList rows = m_table->selectionModel()->selectedRows();
+                    const int selectedRow = rows.isEmpty() ? -1 : rows.first().row();
+                    m_pressedSelectedRow = (index.isValid() && index.row() == selectedRow) ? selectedRow : -1;
+                    if (!index.isValid())
+                        m_table->clearSelection();
+                } else {
+                    if (index.isValid() && index.row() == m_pressedSelectedRow)
+                        QTimer::singleShot(0, this, [this]() { m_table->clearSelection(); });
+                    m_pressedSelectedRow = -1;
+                }
+            } else if (type == QEvent::MouseButtonPress && (widget == this || isAncestorOf(widget))
+                       && !isOnControl(widget, this)) {
+                m_table->clearSelection();               // empty space anywhere else on the page
+            }
+        }
+    }
     return PageBase::eventFilter(watched, event);
 }
 
