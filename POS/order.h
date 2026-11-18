@@ -49,6 +49,9 @@ namespace pos {
     // (123, 14) -> "00012314"
     std::string makeOrderId(int sequence, int dayOfMonth);
 
+    // Returns true if phone is exactly 11 numeric digits and starts with "03".
+    bool isValidPhone(const std::string& phone);
+
     class IOrderRepository {
     public:
         virtual ~IOrderRepository() = default;

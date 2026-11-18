@@ -196,6 +196,36 @@ namespace pos {
         return false;
     }
 
+    bool FileProductRepository::add(Product& product)
+    {
+        vector<Record> data = readRecords(path_);
+        if (product.id.empty())
+        {
+            int maxId = 0;
+            for (size_t i = 0; i < data.size(); i++)
+            {
+                if (data[i].size() == 10 && isNumber(data[i][0]))
+                {
+                    try {
+                        int val = stoi(data[i][0]);
+                        if (val > maxId) maxId = val;
+                    } catch (...) {}
+                }
+            }
+            product.id = makeProductId(maxId + 1);
+        }
+        else
+        {
+            for (size_t i = 0; i < data.size(); i++)
+            {
+                if (!data[i].empty() && data[i][0] == product.id)
+                    return false;
+            }
+        }
+        data.push_back(producttoRecord(product));
+        return writeRecords(path_, data);
+    }
+
     bool FileProductRepository::assignIDs()
     {
         vector<Record> data = readRecords(path_);
