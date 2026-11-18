@@ -228,16 +228,4 @@ namespace pos {
 	{
 		return static_cast<int>(readRecords(orderFile_).size());
 	}
-
-	bool isValidPhone(const string& phone)
-	{
-		if ( phone.length() != 11 || phone [0] != '0' || phone [1] != '3' )
-			return false;
-		for ( char c : phone )
-			if ( c < '0' || c > '9' )
-				return false;
-		return true;
-	}
-
 }
-

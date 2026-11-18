@@ -25,6 +25,22 @@
 
 namespace {
 
+// Optional field: empty is fine. Once the user has typed something it must be
+// exactly 11 digits starting with "03".
+bool isValidContact(const QString& contact)
+{
+    if (contact.size() != 11 || !contact.startsWith(QLatin1String("03")))
+        return false;
+    for (const QChar c : contact)
+        if (!c.isDigit())
+            return false;
+    return true;
+}
+
+} // namespace
+
+namespace {
+
 constexpr int kScanCooldownMs = 1500;
 constexpr int kLongMessageMs = 4000;
 
@@ -102,15 +118,14 @@ QWidget* OrderPage::buildOrderCard()
     m_contact = new NeuLineEdit(card);
     m_contact->setPlaceholderText("Contact (03XXXXXXXXX)");
     m_contact->setMaxLength(11);
-    m_contact->setValidator(new QRegularExpressionValidator(QRegularExpression("^(0(3[0-9]{0,9})?)?$"), m_contact));
+    m_contact->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9]*"), m_contact));
 
     connect(m_name, &QLineEdit::textChanged, this, [this]() {
         if (!m_name->text().trimmed().isEmpty())
             m_name->setState("");
     });
     connect(m_contact, &QLineEdit::textChanged, this, [this]() {
-        if (!m_contact->text().trimmed().isEmpty())
-            m_contact->setState("");
+        m_contact->setState("");
     });
 
     auto* customer = new QHBoxLayout;
@@ -296,10 +311,10 @@ void OrderPage::generateBill()
     }
 
     const QString contact = m_contact->text().trimmed();
-    if (!pos::isValidPhone(contact.toStdString())) {
+    if (!contact.isEmpty() && !isValidContact(contact)) {   // contact is optional
         m_contact->setState("invalid");
         m_contact->setFocus();
-        m_banner->showMessage("Enter a valid 11-digit phone number (03XXXXXXXXX)", Banner::Error);
+        m_banner->showMessage("Enter a valid number", Banner::Error);
         return;
     }
 
