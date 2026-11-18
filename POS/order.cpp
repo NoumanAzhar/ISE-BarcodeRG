@@ -228,21 +228,20 @@ namespace pos {
 	{
 		return static_cast<int>(readRecords(orderFile_).size());
 	}
+}
 
-	bool isValidPhone(const string& phone)
-	{
-		if (phone.length() != 11) {
-			return false;
-		}
-		if (phone[0] != '0' || phone[1] != '3') {
-			return false;
-		}
-		for (char c : phone) {
-			if (!isdigit(static_cast<unsigned char>(c))) {
-				return false;
-			}
-		}
-		return true;
+
+bool Is_Valid_Phone(string phone) {
+	if (phone.length() != 11) {
+		return false;
 	}
-
-} // namespace pos
+	if (phone[0] != '0' || phone[1] != '3') {
+		return false;
+	}
+	for (int i = 0; i < phone.length(); i++) {
+		if (isdigit(phone[i]) == false) {
+			return false;
+		}
+	}
+	return true;
+}
