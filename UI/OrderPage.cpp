@@ -9,6 +9,7 @@
 #include "OrderTotals.h"
 #include "ProductDialog.h"
 #include "Widgets.h"
+#include "order.h"
 
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -99,7 +100,18 @@ QWidget* OrderPage::buildOrderCard()
     m_name = new NeuLineEdit(card);
     m_name->setPlaceholderText("Customer name");
     m_contact = new NeuLineEdit(card);
-    m_contact->setPlaceholderText("Contact (optional)");
+    m_contact->setPlaceholderText("Contact (03XXXXXXXXX)");
+    m_contact->setMaxLength(11);
+    m_contact->setValidator(new QRegularExpressionValidator(QRegularExpression("^(0(3[0-9]{0,9})?)?$"), m_contact));
+
+    connect(m_name, &QLineEdit::textChanged, this, [this]() {
+        if (!m_name->text().trimmed().isEmpty())
+            m_name->setState("");
+    });
+    connect(m_contact, &QLineEdit::textChanged, this, [this]() {
+        if (!m_contact->text().trimmed().isEmpty())
+            m_contact->setState("");
+    });
 
     auto* customer = new QHBoxLayout;
     customer->setSpacing(2);
@@ -283,10 +295,18 @@ void OrderPage::generateBill()
         return;
     }
 
+    const QString contact = m_contact->text().trimmed();
+    if (!pos::isValidPhone(contact.toStdString())) {
+        m_contact->setState("invalid");
+        m_contact->setFocus();
+        m_banner->showMessage("Enter a valid 11-digit phone number (03XXXXXXXXX)", Banner::Error);
+        return;
+    }
+
 	const bool cameraWasOn = m_camera->isActive();
     m_camera->setActive(false);
     const CheckoutFlow::Outcome outcome =
-        CheckoutFlow(m_services).run(name, m_contact->text().trimmed(), this);
+        CheckoutFlow(m_services).run(name, contact, this);
     if (m_active && cameraWasOn)
         m_camera->setActive(true);
 
@@ -314,8 +334,11 @@ void OrderPage::generateBill()
 void OrderPage::resetFields()
 {
     m_name->clear();
+    m_name->setState("");
     m_contact->clear();
+    m_contact->setState("");
     m_code->clear();
+    m_code->setState("");
 }
 
 void OrderPage::refreshAll()
