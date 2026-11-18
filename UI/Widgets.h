@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Neu.h"
+
 #include <QChar>
 #include <QFile>
 #include <QFrame>
@@ -19,6 +21,9 @@ const QChar kEllipsis(0x2026);
 const QChar kMiddleDot(0x00B7);
 const QChar kSun(0x2600);
 const QChar kMoon(0x263E);
+const QChar kCheck(0x2713);
+const QChar kCross(0x2715);
+const QChar kMultiply(0x00D7);
 
 // Path as the backend (OpenCV) expects it: the local 8-bit encoding.
 inline std::string toNativePath(const QString& path)
@@ -33,34 +38,42 @@ void repolish(QWidget* w);
 // (crisp bars), big images are shrunk smoothly.
 QPixmap fitPixmap(const QPixmap& src, const QSize& area);
 
-// A plain rounded card (styled by the style sheet).
-QFrame* makeCard(QWidget* parent = nullptr);
+// A QLabel with an object name from the style sheet (see Theme.h).
+QLabel* makeLabel(const QString& text, const char* objectName, QWidget* parent = nullptr);
+
+// Raised card / inset well (both already hold their shadow room as contents margin).
+NeuFrame* makeCard(QWidget* parent = nullptr);
+NeuFrame* makeWell(QWidget* parent = nullptr);
 
 // ---------------------------------------------------------------------------
-// Small painted icon (no image files needed): a barcode on a rounded tile.
+// Painted icon (no image files). Glyphs are drawn in the accent colour; the
+// Logo is an accent tile. Scales to any size.
 class IconWidget : public QWidget {
     Q_OBJECT
 public:
-    enum Kind { Logo, Generate, Scan };
+    enum Kind { Logo, Generate, Scan, Cashier, Manager, Order, Products, Camera };
     IconWidget(Kind kind, int size, QWidget* parent = nullptr);
+
+    void setMuted(bool muted);    // grey instead of accent (inactive rail items)
 
 protected:
     void paintEvent(QPaintEvent* event) override;
 
 private:
     Kind m_kind;
+    bool m_muted = false;
 };
 
 class QTimer;
 
 // ---------------------------------------------------------------------------
-// Coloured message bar; hidden until showMessage() is called.
+// Coloured message bar with a leading symbol; hidden until showMessage().
 class Banner : public QLabel {
     Q_OBJECT
 public:
-    enum Kind { Info, Success, Error };
+    enum Kind { Info, Success, Warning, Error };
     explicit Banner(QWidget* parent = nullptr);
-    void showMessage(const QString& text, Kind kind, int timeoutMs = 2000);
+    void showMessage(const QString& text, Kind kind, int timeoutMs = 2500);
     void clearMessage();
 
 private:
@@ -68,48 +81,39 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Back button + title + subtitle shown at the top of every page.
+// Title shown above a page (the Workspace uses it; pages do not draw their own).
 class PageHeader : public QWidget {
     Q_OBJECT
 public:
-    PageHeader(const QString& title, const QString& subtitle, QWidget* parent = nullptr);
+    explicit PageHeader(const QString& title, QWidget* parent = nullptr);
+    void setTitle(const QString& title);
 
-signals:
-    void backClicked();
+private:
+    QLabel* m_title = nullptr;
 };
 
 // ---------------------------------------------------------------------------
-// Big clickable card used on the main menu (mouse, Enter and Space all work).
-class ActionCard : public QFrame {
+// Big clickable raised card (home page). Mouse, Enter and Space all work.
+class ActionCard : public NeuFrame {
     Q_OBJECT
 public:
     ActionCard(IconWidget::Kind icon, const QString& title, const QString& text,
                QWidget* parent = nullptr);
-
-signals:
-    void clicked();
-
-protected:
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
-    void keyPressEvent(QKeyEvent* event) override;
 };
 
 // ---------------------------------------------------------------------------
-// Area that accepts a dropped image file; also emits clicked() when clicked.
-class DropZone : public QFrame {
+// Inset area that accepts a dropped image file; also emits clicked().
+// Shows a dashed ring that turns accent-coloured while a file is dragged over it.
+class DropZone : public NeuFrame {
     Q_OBJECT
 public:
     explicit DropZone(QWidget* parent = nullptr);
 
 signals:
     void fileDropped(const QString& path);
-    void clicked();
 
 protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
 };

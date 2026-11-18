@@ -1,6 +1,6 @@
 #include "GeneratePage.h"
 
-#include "Theme.h"
+#include "Neu.h"
 #include "Widgets.h"
 #include "barcode_render.h"
 #include "code128.h"
@@ -12,43 +12,24 @@
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QLineEdit>
-#include <QPainter>
-#include <QPushButton>
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
-#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 
 namespace {
 
-// QLineEdit that always shows placeholder text whenever empty, even while focused.
-class PersistentPlaceholderLineEdit : public QLineEdit {
-public:
-    using QLineEdit::QLineEdit;
-
-protected:
-    void paintEvent(QPaintEvent* event) override
-    {
-        QLineEdit::paintEvent(event);
-        if (text().isEmpty() && !placeholderText().isEmpty() && hasFocus()) {
-            QPainter p(this);
-            p.setPen(Theme::colors().muted);
-            p.setFont(font());
-            p.drawText(rect(), alignment(), placeholderText());
-        }
-    }
-};
-
 // Size of one module (the thinnest bar) in pixels, and bar height, used for the
 // image that is saved to disk. Bigger bars are easier for the reader.
 const int kModuleWidth = 4;
 const int kBarHeight = 140;
+
+const char* const kEmptyPreviewText = "Your barcode will appear here";
 
 QImage matToQImage(const cv::Mat& m)
 {
@@ -94,182 +75,139 @@ QString GeneratePage::outputDir()
 }
 
 GeneratePage::GeneratePage(QWidget* parent)
-    : QWidget(parent)
+    : PageBase(parent)
 {
-    setObjectName("page");
+    auto* root = new QHBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(2);                         // cards already hold their shadow room
+    root->addWidget(buildInputCard(), 4);
+    root->addWidget(buildPreviewCard(), 6);
 
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(40, 10, 40, 28);
-    root->setSpacing(18);
+    onTextChanged(QString());
+}
 
-    auto* header = new PageHeader(
-        "Generate barcode",
-        "The barcode gets generated instantly and shown as a preview. You can save it manually.",
-        this);
-    connect(header, &PageHeader::backClicked, this, &GeneratePage::backRequested);
-    root->addWidget(header);
+// ---------------------------------------------------------------- building
 
-    auto* body = new QHBoxLayout;
-    body->setSpacing(20);
+QWidget* GeneratePage::buildInputCard()
+{
+    NeuFrame* card = makeCard();
+    auto* layout = new QVBoxLayout(card);
+    layout->setContentsMargins(20, 18, 20, 18);
+    layout->setSpacing(10);
 
-    // ------------------------------------------------------------------ left
-    QFrame* left = makeCard(this);
-    auto* leftLayout = new QVBoxLayout(left);
-    leftLayout->setContentsMargins(26, 24, 26, 24);
-    leftLayout->setSpacing(10);
+    auto* label = makeLabel("Number", "fieldLabel", card);
 
-    auto* fieldLabel = new QLabel("Number to encode", left);
-    fieldLabel->setObjectName("fieldLabel");
-
-    m_input = new PersistentPlaceholderLineEdit(left);
-    //m_input->setPlaceholderText("e.g. 483920");
+    m_input = new NeuLineEdit(card);
+    m_input->setLarge(true);
     m_input->setMaxLength(6);
     m_input->setAlignment(Qt::AlignCenter);
-    m_input->setClearButtonEnabled(true);
+    m_input->setPlaceholderText("e.g. 483920");
     m_input->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9]{0,6}"), m_input));
 
-    m_hint = new QLabel(left);
-    m_hint->setObjectName("hint");
+    m_hint = makeLabel(QString(), "hint", card);
     m_hint->setWordWrap(true);
-
-    m_counter = new QLabel("0 / 6", left);
-    m_counter->setObjectName("muted");
+    m_counter = makeLabel("0 / 6", "muted", card);
 
     auto* hintRow = new QHBoxLayout;
     hintRow->addWidget(m_hint, 1);
     hintRow->addWidget(m_counter, 0, Qt::AlignTop);
 
-    m_generateBtn = new QPushButton("Generate", left);
-    m_generateBtn->setObjectName("primary");
-    m_generateBtn->setCursor(Qt::PointingHandCursor);
+    m_generateBtn = new NeuButton("Generate", NeuButton::Variant::Primary, card);
+    auto* randomBtn = new NeuButton("Random", NeuButton::Variant::Normal, card);
+    randomBtn->setToolTip("Fill in a random valid number and generate it");
 
-    m_randomBtn = new QPushButton("Random number", left);
-    m_randomBtn->setCursor(Qt::PointingHandCursor);
-    m_randomBtn->setToolTip("Fill in a random valid number and generate it");
+    auto* buttons = new QHBoxLayout;
+    buttons->setSpacing(2);
+    buttons->addWidget(m_generateBtn, 1);
+    buttons->addWidget(randomBtn);
 
-    auto* buttonRow = new QHBoxLayout;
-    buttonRow->setSpacing(10);
-    buttonRow->addWidget(m_generateBtn, 1);
-    buttonRow->addWidget(m_randomBtn);
+    layout->addWidget(label);
+    layout->addWidget(m_input);
+    layout->addLayout(hintRow);
+    layout->addLayout(buttons);
+    layout->addStretch(1);
 
-    auto* note = new QLabel(
-        "Format: Code 128, Set C. Six digits "/*become three symbols, plus a start "
-        "symbol, a checksum and a stop symbol."*/,
-        left);
-    note->setObjectName("muted");
-    note->setWordWrap(true);
+    connect(m_input, &QLineEdit::textChanged, this, &GeneratePage::onTextChanged);
+    connect(m_input, &QLineEdit::returnPressed, this, &GeneratePage::generate);
+    connect(m_generateBtn, &NeuButton::clicked, this, &GeneratePage::generate);
+    connect(randomBtn, &NeuButton::clicked, this, &GeneratePage::randomNumber);
+    return card;
+}
 
-    leftLayout->addWidget(fieldLabel);
-    leftLayout->addWidget(m_input);
-    leftLayout->addLayout(hintRow);
-    leftLayout->addSpacing(8);
-    leftLayout->addLayout(buttonRow);
-    leftLayout->addStretch(1);
-    leftLayout->addWidget(note);
+QWidget* GeneratePage::buildPreviewCard()
+{
+    NeuFrame* card = makeCard();
+    auto* layout = new QVBoxLayout(card);
+    layout->setContentsMargins(20, 18, 20, 18);
+    layout->setSpacing(10);
 
-    // ----------------------------------------------------------------- right
-    QFrame* right = makeCard(this);
-    auto* rightLayout = new QVBoxLayout(right);
-    rightLayout->setContentsMargins(22, 22, 22, 22);
-    rightLayout->setSpacing(12);
-
-    // White "paper" so the barcode always looks like a printed one.
-    auto* paper = new QFrame(right);
+    // White paper so the barcode always looks like a printed one.
+    auto* paper = new QFrame(card);
     paper->setObjectName("paper");
+    paper->setStyleSheet("QFrame#paper { background: #ffffff; border-radius: 14px; }");
     auto* paperLayout = new QVBoxLayout(paper);
     paperLayout->setContentsMargins(18, 18, 18, 14);
     paperLayout->setSpacing(6);
 
-    m_preview = new QLabel("Your barcode will appear here", paper);
+    m_preview = new QLabel(kEmptyPreviewText, paper);
     m_preview->setObjectName("paperText");
     m_preview->setAlignment(Qt::AlignCenter);
     m_preview->setMinimumSize(320, 150);
     m_preview->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     m_preview->installEventFilter(this);
 
-    //m_digitsLabel = new QLabel(paper);
-    //m_digitsLabel->setObjectName("paperDigits");
-    //m_digitsLabel->setAlignment(Qt::AlignCenter);
+    m_digitsLabel = makeLabel(QString(), "paperDigits", paper);
+    m_digitsLabel->setAlignment(Qt::AlignCenter);
 
     paperLayout->addWidget(m_preview, 1);
-    //paperLayout->addWidget(m_digitsLabel);
+    paperLayout->addWidget(m_digitsLabel);
 
-    m_banner = new Banner(right);
-
-    m_path = new QLabel(right);
-    m_path->setObjectName("muted");
+    m_path = makeLabel(QString(), "muted", card);
     m_path->setWordWrap(true);
     m_path->setTextInteractionFlags(Qt::TextSelectableByMouse);
 
-    m_saveBtn = new QPushButton(QString("Save as") + kEllipsis, right);
-    m_copyBtn = new QPushButton("Copy image", right);
-    m_folderBtn = new QPushButton("Open folder", right);
-    for (QPushButton* b : { m_saveBtn, m_copyBtn, m_folderBtn }) {
-        b->setCursor(Qt::PointingHandCursor);
-        b->setEnabled(false);
-    }
+    m_banner = new Banner(card);
 
-    auto* actionRow = new QHBoxLayout;
-    actionRow->setSpacing(10);
-    actionRow->addWidget(m_saveBtn);
-    actionRow->addWidget(m_copyBtn);
-    actionRow->addWidget(m_folderBtn);
-    actionRow->addStretch(1);
+    m_saveBtn = new NeuButton(QString("Save as") + kEllipsis, NeuButton::Variant::Normal, card);
+    m_copyBtn = new NeuButton("Copy image", NeuButton::Variant::Normal, card);
+    m_folderBtn = new NeuButton("Open folder", NeuButton::Variant::Normal, card);
 
-    rightLayout->addWidget(paper, 1);
-    rightLayout->addWidget(m_banner);
-    rightLayout->addWidget(m_path);
-    rightLayout->addLayout(actionRow);
+    auto* actions = new QHBoxLayout;
+    actions->setSpacing(2);
+    actions->addWidget(m_saveBtn);
+    actions->addWidget(m_copyBtn);
+    actions->addWidget(m_folderBtn);
+    actions->addStretch(1);
 
-    body->addWidget(left, 4);
-    body->addWidget(right, 6);
-    root->addLayout(body, 1);
+    layout->addWidget(paper, 1);
+    layout->addWidget(m_path);
+    layout->addWidget(m_banner);
+    layout->addLayout(actions);
 
-    // ------------------------------------------------------------- behaviour
-    connect(m_input, &QLineEdit::textChanged, this, &GeneratePage::onTextChanged);
-    connect(m_input, &QLineEdit::returnPressed, this, &GeneratePage::generate);
-    connect(m_generateBtn, &QPushButton::clicked, this, &GeneratePage::generate);
-    connect(m_randomBtn, &QPushButton::clicked, this, &GeneratePage::randomNumber);
-    connect(m_saveBtn, &QPushButton::clicked, this, &GeneratePage::saveAs);
-    connect(m_copyBtn, &QPushButton::clicked, this, &GeneratePage::copyImage);
-    connect(m_folderBtn, &QPushButton::clicked, this, &GeneratePage::openFolder);
+    connect(m_saveBtn, &NeuButton::clicked, this, &GeneratePage::saveAs);
+    connect(m_copyBtn, &NeuButton::clicked, this, &GeneratePage::copyImage);
+    connect(m_folderBtn, &NeuButton::clicked, this, &GeneratePage::openFolder);
 
-    onTextChanged(QString());
+    setActionsEnabled(false);
+    return card;
 }
 
-void GeneratePage::focusInput()
+// ------------------------------------------------------------- page hooks
+
+void GeneratePage::onActivated()
 {
+    clearPreview();
     m_input->setFocus();
-    m_input->selectAll();
-}
-
-void GeneratePage::clearPreview()
-{
-    if (m_input) {
-        m_input->clear();
-    }
-
-    m_image = QImage();
-    m_currentDigits.clear();
-
-    m_preview->clear();
-    m_preview->setText("Your barcode will appear here");
-
-    //m_digitsLabel->clear();
-    m_path->clear();
-    m_banner->clearMessage();
-
-    m_saveBtn->setEnabled(false);
-    m_copyBtn->setEnabled(false);
-    m_folderBtn->setEnabled(false);
 }
 
 bool GeneratePage::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_preview && event->type() == QEvent::Resize)
         updatePreview();
-    return QWidget::eventFilter(watched, event);
+    return PageBase::eventFilter(watched, event);
 }
+
+// ------------------------------------------------------------------- input
 
 void GeneratePage::onTextChanged(const QString& text)
 {
@@ -296,9 +234,8 @@ void GeneratePage::onTextChanged(const QString& text)
         hint = "Enter exactly 6 digits.";
     }
 
-    m_input->setProperty("state", state);
+    m_input->setState(state);
     m_hint->setProperty("state", state);
-    repolish(m_input);
     repolish(m_hint);
 
     m_hint->setText(hint);
@@ -309,7 +246,10 @@ void GeneratePage::randomNumber()
 {
     const int value = QRandomGenerator::global()->bounded(100000, 1000000);   // 100000..999999
     m_input->setText(QString::number(value));
+    generate();
 }
+
+// ---------------------------------------------------------------- generate
 
 void GeneratePage::generate()
 {
@@ -324,32 +264,27 @@ void GeneratePage::generate()
         return;
     }
 
-    const cv::Mat img = renderBarcode(modules, kModuleWidth, kBarHeight);
-    m_image = matToQImage(img);
+    m_image = matToQImage(renderBarcode(modules, kModuleWidth, kBarHeight));
     if (m_image.isNull()) {
         m_banner->showMessage("The barcode image could not be drawn.", Banner::Error);
         return;
     }
 
     m_currentDigits = digits;
-    //m_digitsLabel->setText(spaced(digits));
+    m_digitsLabel->setText(spaced(digits));
     updatePreview();
+    setActionsEnabled(true);
 
-    m_saveBtn->setEnabled(true);
-    m_copyBtn->setEnabled(true);
-    m_folderBtn->setEnabled(true);
-
-    // Show preview only. Saving is available through the Save as button.
-    m_path->clear();
-
-    // Clear the hint text after generating
-    m_hint->clear();
-    m_hint->setProperty("state", QString());
-    repolish(m_hint);
-
-    m_banner->showMessage(
-        "Barcode generated successfully.",
-        Banner::Success);
+    QDir().mkpath(outputDir());
+    const QString path = QDir(outputDir()).filePath(digits + ".png");
+    if (m_image.save(path)) {
+        m_path->setText(QDir::toNativeSeparators(path));
+        m_banner->showMessage(QString(kCheck) + "  Barcode generated and saved.", Banner::Success);
+    } else {
+        m_path->clear();
+        m_banner->showMessage("Barcode generated, but it could not be saved to "
+                              + QDir::toNativeSeparators(outputDir()), Banner::Warning);
+    }
 }
 
 void GeneratePage::updatePreview()
@@ -358,6 +293,30 @@ void GeneratePage::updatePreview()
         return;
     m_preview->setPixmap(fitPixmap(QPixmap::fromImage(m_image), m_preview->size()));
 }
+
+void GeneratePage::clearPreview()
+{
+    m_input->clear();
+
+    m_image = QImage();
+    m_currentDigits.clear();
+
+    m_preview->clear();
+    m_preview->setText(kEmptyPreviewText);
+    m_digitsLabel->clear();
+    m_path->clear();
+    m_banner->clearMessage();
+    setActionsEnabled(false);
+}
+
+void GeneratePage::setActionsEnabled(bool enabled)
+{
+    m_saveBtn->setEnabled(enabled);
+    m_copyBtn->setEnabled(enabled);
+    m_folderBtn->setEnabled(enabled);
+}
+
+// ----------------------------------------------------------------- actions
 
 void GeneratePage::saveAs()
 {

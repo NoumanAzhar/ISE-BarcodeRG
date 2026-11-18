@@ -11,8 +11,8 @@ string FileUtils::readLastId(const string& filename) {
 		if (!line.empty())
 			lastLine = line;
 	}
-	int pos = lastLine.find('|');
-	if (pos == string::npos)		
+	size_t pos = lastLine.find('|');
+	if (pos == string::npos)
 		return "";
 	return lastLine.substr(0, pos);
 }

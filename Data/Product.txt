@@ -1,0 +1,3 @@
+0001|100001|LAYS|Lays|count|50.00|5.00|0.00|86|data/barcodes/100001.png|#
+0002|100002|COCOMO|Cocomo|count|10.00|1.00|0.00|149|data/barcodes/100002.png|#
+0003|100003|7UPDIET|Diet 7up|count|150.00|15.00|5.00|59|data/barcodes/100003.png|#

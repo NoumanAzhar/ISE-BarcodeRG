@@ -1,0 +1,60 @@
+#pragma once
+
+#include "PageBase.h"
+
+#include "Product.h"
+
+#include <QPixmap>
+#include <QString>
+
+#include <vector>
+
+namespace pos { class AppServices; }
+
+class Banner;
+class NeuButton;
+class NeuLineEdit;
+class ProductDetailsView;
+class QLabel;
+class QStackedWidget;
+class QTableWidget;
+
+// Manager's product list: search, specs, barcode image and "Assign barcodes".
+class ProductsPage : public PageBase {
+    Q_OBJECT
+public:
+    ProductsPage(pos::AppServices& services, QWidget* parent = nullptr);
+
+    void onActivated() override;       // reload the list (stock changes after every sale)
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+private:
+    QWidget* buildListSide();
+    QWidget* buildDetailsCard();
+
+    void reload();
+    void applyFilter();
+    void addRow(const pos::Product& product);
+    void selectById(const QString& id);
+    QString selectedId() const;
+    void showSelected();
+    void showBarcodeImage();
+    void assignBarcodes();
+
+    pos::AppServices& m_services;
+    std::vector<pos::Product> m_products;
+
+    NeuLineEdit* m_search = nullptr;
+    QStackedWidget* m_listStack = nullptr;     // 0 = table, 1 = empty text
+    QTableWidget* m_table = nullptr;
+    QLabel* m_emptyLabel = nullptr;
+
+    ProductDetailsView* m_details = nullptr;
+    QStackedWidget* m_imageStack = nullptr;    // 0 = barcode on paper, 1 = "No barcode image"
+    QLabel* m_image = nullptr;
+    Banner* m_banner = nullptr;
+
+    QPixmap m_barcodePixmap;
+};

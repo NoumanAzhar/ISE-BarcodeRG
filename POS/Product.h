@@ -1,4 +1,5 @@
 #pragma once
+#include <cctype>
 #include <optional>
 #include <string>
 #include <vector>
@@ -35,12 +36,14 @@ namespace pos {
             this->id = id; this->barcode = barcode; this->acronym = acronym; this->name = name; this->barcodeFile = barcodeFile;
             this->unitPrice = unitPrice; this->tax = tax; this->discount = discount; this->availableQty = availableQty;
 
-            for(int i=0;i<unit.length();i++)
+            // lower-case copy of the unit text (the old code appended to an undeclared variable 'type')
+            string lowered;
+            for (size_t i = 0; i < unit.length(); i++)
             {
-                type += static_cast<char>(tolower(static_cast<unsigned char>(unit[i])));
+                lowered += static_cast<char>(tolower(static_cast<unsigned char>(unit[i])));
             }
 
-            if (unit == "count")
+            if (lowered == "count")
                 this->unit = MeasureUnit::Count;
             else
                 this->unit = MeasureUnit::Weight;
@@ -79,9 +82,10 @@ namespace pos {
         std::optional<Product> findById(const std::string& id) const override;
         std::vector<Product> all() const override;
         bool update(const Product& product) override;
+        bool assignIDs();
 
         // (added, not in the shared interface) messages about malformed lines
-        // from the most recent read, e.g. "line 3: expected 10 fields".
+        // from the most recent all(), e.g. "record 3: expected 10 valid fields".
         const std::vector<std::string>& warnings() const;
 
     private:

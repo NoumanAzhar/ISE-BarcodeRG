@@ -1,32 +1,33 @@
 #pragma once
 
+#include "PageBase.h"
+
 #include <QImage>
 #include <QString>
-#include <QWidget>
 
 class Banner;
+class NeuButton;
+class NeuLineEdit;
 class QLabel;
-class QLineEdit;
-class QPushButton;
 
-// Page 1: type a 6-digit number -> barcode is drawn, shown and saved as PNG.
-class GeneratePage : public QWidget {
+// Type a 6-digit number -> the barcode is drawn, shown and saved as PNG.
+class GeneratePage : public PageBase {
     Q_OBJECT
 public:
     explicit GeneratePage(QWidget* parent = nullptr);
 
-    void focusInput();
-    void clearPreview();
     // Folder where generated barcodes are saved automatically (next to the app).
     static QString outputDir();
 
-signals:
-    void backRequested();
+    void onActivated() override;    // clear the preview, focus the input
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    QWidget* buildInputCard();
+    QWidget* buildPreviewCard();
+
     void onTextChanged(const QString& text);
     void generate();
     void randomNumber();
@@ -34,20 +35,21 @@ private:
     void copyImage();
     void openFolder();
     void updatePreview();
+    void clearPreview();
+    void setActionsEnabled(bool enabled);
 
-    QLineEdit* m_input = nullptr;
+    NeuLineEdit* m_input = nullptr;
     QLabel* m_hint = nullptr;
     QLabel* m_counter = nullptr;
-    QPushButton* m_generateBtn = nullptr;
-    QPushButton* m_randomBtn = nullptr;
+    NeuButton* m_generateBtn = nullptr;
 
     QLabel* m_preview = nullptr;
     QLabel* m_digitsLabel = nullptr;
     QLabel* m_path = nullptr;
     Banner* m_banner = nullptr;
-    QPushButton* m_saveBtn = nullptr;
-    QPushButton* m_copyBtn = nullptr;
-    QPushButton* m_folderBtn = nullptr;
+    NeuButton* m_saveBtn = nullptr;
+    NeuButton* m_copyBtn = nullptr;
+    NeuButton* m_folderBtn = nullptr;
 
     QImage m_image;             // the barcode currently shown
     QString m_currentDigits;    // the number it encodes

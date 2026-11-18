@@ -1,30 +1,30 @@
 #include "ReadPage.h"
 
-#include "GeneratePage.h"
+#include "AppServices.h"
+#include "CameraScannerWidget.h"
+#include "Format.h"
+#include "Neu.h"
+#include "ProductDetailsView.h"
+#include "Theme.h"
 #include "Widgets.h"
 #include "barcode_reader.h"
 
 #include <QApplication>
 #include <QClipboard>
-#include <QDir>
 #include <QEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QHBoxLayout>
-#include <QColor>
-#include <QIcon>
-#include <QImage>
 #include <QLabel>
-#include <QPainter>
-#include <QPen>
-#include <QPushButton>
+#include <QStackedWidget>
 #include <QStandardPaths>
 #include <QStringList>
-#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
+
+constexpr int kErrorMs = 4000;
 
 bool isImageSuffix(const QString& suffix)
 {
@@ -32,268 +32,204 @@ bool isImageSuffix(const QString& suffix)
     return kSuffixes.contains(suffix.toLower());
 }
 
-// Small camera icon, painted so no image file is needed. Neutral grey so it
-// is visible on both the light and the dark theme.
-QIcon makeCameraIcon(int size)
-{
-    const qreal dpr = 2.0;
-    QPixmap pm(int(size * dpr), int(size * dpr));
-    pm.setDevicePixelRatio(dpr);
-    pm.fill(Qt::transparent);
-
-    QPainter p(&pm);
-    p.setRenderHint(QPainter::Antialiasing);
-    const QColor c(0x8a, 0x94, 0xa6);
-    p.setPen(QPen(c, 1.6));
-    p.setBrush(Qt::NoBrush);
-
-    const qreal s = size;
-    p.drawRoundedRect(QRectF(s * 0.08, s * 0.28, s * 0.84, s * 0.58), 3, 3);  // body
-    p.setBrush(c);
-    p.drawRoundedRect(QRectF(s * 0.30, s * 0.16, s * 0.26, s * 0.14), 2, 2);  // top bump
-    p.setBrush(Qt::NoBrush);
-    p.drawEllipse(QPointF(s * 0.5, s * 0.57), s * 0.19, s * 0.19);            // lens
-    p.end();
-    return QIcon(pm);
-}
-
-// Frame around the barcode on the live picture.
-void drawBox(QPixmap& pm, const QRect& box, const QColor& color)
-{
-    if (box.isEmpty())
-        return;
-    QPainter p(&pm);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(color, qMax(3, pm.width() / 320)));
-    p.setBrush(Qt::NoBrush);
-    p.drawRect(box.adjusted(-4, -4, 4, 4));
-}
-
 } // namespace
 
-ReadPage::ReadPage(QWidget* parent)
-    : QWidget(parent)
+ReadPage::ReadPage(pos::AppServices& services, ReadMode mode, QWidget* parent)
+    : PageBase(parent), m_services(services), m_mode(mode)
 {
-    setObjectName("page");
+    m_lastDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
 
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(40, 10, 40, 28);
-    root->setSpacing(18);
-
-    auto* header = new PageHeader(
-        "Read barcode",
-        "Drop a barcode image into the box, or click it to browse.",
-        this);
-    connect(header, &PageHeader::backClicked, this, &ReadPage::backRequested);
-    root->addWidget(header);
-
-    auto* body = new QHBoxLayout;
-    body->setSpacing(20);
-
-    // -------------------------------------------------------- left: drop zone
-    m_drop = new DropZone(this);
-    m_drop->setMinimumHeight(340);
-    auto* dropLayout = new QVBoxLayout(m_drop);
-    dropLayout->setContentsMargins(24, 24, 24, 20);
-    dropLayout->setSpacing(8);
-
-    // Shown while no image is loaded.
-    m_placeholder = new QWidget(m_drop);
-    auto* phLayout = new QVBoxLayout(m_placeholder);
-    phLayout->setContentsMargins(0, 0, 0, 0);
-    phLayout->setSpacing(8);
-
-    auto* phIcon = new IconWidget(IconWidget::Scan, 76, m_placeholder);
-    auto* phTitle = new QLabel("Drop a barcode image here", m_placeholder);
-    phTitle->setObjectName("cardTitle");
-    phTitle->setAlignment(Qt::AlignCenter);
-    auto* phText = new QLabel("PNG, JPG or BMP. You can also click anywhere in this box.",
-                              m_placeholder);
-    phText->setObjectName("cardText");
-    phText->setAlignment(Qt::AlignCenter);
-    phText->setWordWrap(true);
-
-    auto* browseBtn = new QPushButton(QString("Choose image") + kEllipsis, m_placeholder);
-    browseBtn->setObjectName("primary");
-    browseBtn->setCursor(Qt::PointingHandCursor);
-
-    m_cameraBtn = new QPushButton(QString("Use camera"), m_placeholder);
-    m_cameraBtn->setIcon(makeCameraIcon(18));
-    m_cameraBtn->setIconSize(QSize(18, 18));
-    m_cameraBtn->setCursor(Qt::PointingHandCursor);
-    m_cameraBtn->setToolTip("Scan a barcode with the webcam");
-
-    auto* phButtons = new QHBoxLayout;
-    phButtons->setSpacing(10);
-    phButtons->addStretch(1);
-    phButtons->addWidget(browseBtn);
-    phButtons->addWidget(m_cameraBtn);
-    phButtons->addStretch(1);
-
-    phLayout->addStretch(1);
-    phLayout->addWidget(phIcon, 0, Qt::AlignHCenter);
-    phLayout->addSpacing(6);
-    phLayout->addWidget(phTitle);
-    phLayout->addWidget(phText);
-    phLayout->addSpacing(10);
-    phLayout->addLayout(phButtons);
-    phLayout->addStretch(1);
-
-    // Shown once an image is loaded.
-    m_image = new QLabel(m_drop);
-    m_image->setAlignment(Qt::AlignCenter);
-    m_image->setMinimumSize(260, 160);
-    m_image->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
-    m_image->installEventFilter(this);
-    m_image->hide();
-
-    m_caption = new QLabel(m_drop);
-    m_caption->setObjectName("muted");
-    m_caption->setAlignment(Qt::AlignCenter);
-    m_caption->hide();
-
-    dropLayout->addWidget(m_placeholder, 1);
-    dropLayout->addWidget(m_image, 1);
-    dropLayout->addWidget(m_caption);
-
-    // ------------------------------------------------------- right: results
-    QFrame* resultCard = makeCard(this);
-    auto* resultLayout = new QVBoxLayout(resultCard);
-    resultLayout->setContentsMargins(28, 26, 28, 24);
-    resultLayout->setSpacing(10);
-
-    auto* resultLabel = new QLabel("Decoded number", resultCard);
-    resultLabel->setObjectName("fieldLabel");
-
-    m_resultValue = new QLabel(resultCard);
-    m_resultValue->setObjectName("resultValue");
-    m_resultValue->setAlignment(Qt::AlignCenter);
-    m_resultValue->setTextInteractionFlags(Qt::TextSelectableByMouse);
-
-    m_fileName = new QLabel(resultCard);
-    m_fileName->setObjectName("muted");
-    m_fileName->setAlignment(Qt::AlignCenter);
-
-    m_banner = new Banner(resultCard);
-
-    m_copyBtn = new QPushButton("Copy number", resultCard);
-    m_copyBtn->setObjectName("primary");
-    m_copyBtn->setCursor(Qt::PointingHandCursor);
-    m_clearBtn = new QPushButton("Clear", resultCard);
-    m_clearBtn->setCursor(Qt::PointingHandCursor);
-
-    auto* resultButtons = new QHBoxLayout;
-    resultButtons->setSpacing(10);
-    resultButtons->addWidget(m_copyBtn, 1);
-    resultButtons->addWidget(m_clearBtn);
-
-    auto* note = new QLabel(
-        "Format: Code 128, Set C. Six digits. ",
-        resultCard);
-    note->setObjectName("muted");
-    note->setWordWrap(true);
-
-    resultLayout->addWidget(resultLabel);
-    resultLayout->addStretch(1);
-    resultLayout->addWidget(m_resultValue);
-    resultLayout->addWidget(m_fileName);
-    resultLayout->addSpacing(6);
-    resultLayout->addWidget(m_banner);
-    resultLayout->addSpacing(10);
-    resultLayout->addLayout(resultButtons);
-    resultLayout->addStretch(1);
-    resultLayout->addWidget(note);
-
-    body->addWidget(m_drop, 1);
-    body->addWidget(resultCard, 1);
-    root->addLayout(body, 1);
-
-    // ------------------------------------------------------------- behaviour
-    connect(m_drop, &DropZone::clicked, this, &ReadPage::browse);
-    connect(m_drop, &DropZone::fileDropped, this, &ReadPage::loadFile);
-    connect(browseBtn, &QPushButton::clicked, this, &ReadPage::browse);
-    connect(m_copyBtn, &QPushButton::clicked, this, [this]() { copyValue(m_lastValue); });
-    connect(m_clearBtn, &QPushButton::clicked, this, &ReadPage::clearAll);
-
-    m_cameraTimer = new QTimer(this);
-    m_cameraTimer->setInterval(33);                    // ~30 frames per second
-    connect(m_cameraTimer, &QTimer::timeout, this, &ReadPage::onCameraTick);
-    connect(m_cameraBtn, &QPushButton::clicked, this, &ReadPage::startCamera);
+    auto* root = new QHBoxLayout(this);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(2);                         // cards already hold their shadow room
+    root->addWidget(buildSourceCard(), 1);
+    root->addWidget(buildResultCard(), 1);
 
     clearAll();
 }
 
-ReadPage::~ReadPage() = default;   // here, so CameraReader is a complete type
+// ---------------------------------------------------------------- building
+
+QWidget* ReadPage::buildSourceCard()
+{
+    NeuFrame* card = makeCard();
+    auto* layout = new QVBoxLayout(card);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(14);
+
+    m_camera = new CameraScannerWidget(card);
+    connect(m_camera, &CameraScannerWidget::barcodeScanned, this, &ReadPage::onCameraScanned);
+    connect(m_camera, &CameraScannerWidget::cameraFailed, this, &ReadPage::onCameraFailed);
+
+    if (m_mode == ReadMode::CameraOnly) {
+        layout->addWidget(m_camera, 1);
+        return card;
+    }
+
+    m_source = new NeuSegmented(QStringList{ "Image", "Camera" }, card);
+    m_stack = new QStackedWidget(card);
+    m_stack->addWidget(buildDropZone());         // index 0
+    m_stack->addWidget(m_camera);                // index 1
+
+    layout->addWidget(m_source);
+    layout->addWidget(m_stack, 1);
+
+    connect(m_source, &NeuSegmented::currentChanged, this, &ReadPage::setSource);
+    return card;
+}
+
+QWidget* ReadPage::buildDropZone()
+{
+    m_drop = new DropZone(this);
+    m_drop->setMinimumHeight(300);
+
+    auto* layout = new QVBoxLayout(m_drop);
+    layout->setContentsMargins(20, 20, 20, 16);
+    layout->setSpacing(8);
+
+    // Shown while no image is loaded.
+    m_placeholder = new QWidget(m_drop);
+    auto* ph = new QVBoxLayout(m_placeholder);
+    ph->setContentsMargins(0, 0, 0, 0);
+    ph->setSpacing(10);
+
+    auto* icon = new IconWidget(IconWidget::Scan, 64);
+    auto* text = makeLabel("Drop a barcode image or click to choose", "cardText", m_placeholder);
+    text->setAlignment(Qt::AlignCenter);
+    text->setWordWrap(true);
+
+    ph->addStretch(1);
+    ph->addWidget(icon, 0, Qt::AlignHCenter);
+    ph->addWidget(text);
+    ph->addStretch(1);
+
+    // Shown once an image is loaded.
+    m_image = new QLabel(m_drop);
+    m_image->setAlignment(Qt::AlignCenter);
+    m_image->setMinimumSize(200, 120);
+    m_image->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    m_image->installEventFilter(this);
+
+    m_caption = makeLabel(QString(), "muted", m_drop);
+    m_caption->setAlignment(Qt::AlignCenter);
+
+    // Clicks on the content must reach the drop zone.
+    for (QWidget* w : { m_placeholder, static_cast<QWidget*>(m_image), static_cast<QWidget*>(m_caption) })
+        w->setAttribute(Qt::WA_TransparentForMouseEvents);
+
+    layout->addWidget(m_placeholder, 1);
+    layout->addWidget(m_image, 1);
+    layout->addWidget(m_caption);
+
+    connect(m_drop, &DropZone::clicked, this, &ReadPage::browse);
+    connect(m_drop, &DropZone::fileDropped, this, &ReadPage::loadFile);
+    return m_drop;
+}
+
+QWidget* ReadPage::buildResultCard()
+{
+    NeuFrame* card = makeCard();
+    auto* layout = new QVBoxLayout(card);
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(8);
+
+    auto* title = makeLabel("BARCODE", "sectionTitle", card);
+
+    m_value = makeLabel(QString(), "resultValue", card);
+    m_value->setTextInteractionFlags(Qt::TextSelectableByMouse);
+
+    m_details = new ProductDetailsView(card);
+
+    m_banner = new Banner(card);
+
+    m_copyBtn = new NeuButton("Copy", NeuButton::Variant::Primary, card);
+    auto* clearBtn = new NeuButton("Clear", NeuButton::Variant::Normal, card);
+
+    auto* buttons = new QHBoxLayout;
+    buttons->setSpacing(2);
+    buttons->addWidget(m_copyBtn, 1);
+    buttons->addWidget(clearBtn);
+
+    layout->addWidget(title);
+    layout->addWidget(m_value);
+    layout->addWidget(m_details, 1);
+    layout->addWidget(m_banner);
+    layout->addLayout(buttons);
+
+    connect(m_copyBtn, &NeuButton::clicked, this, &ReadPage::copyDigits);
+    connect(clearBtn, &NeuButton::clicked, this, &ReadPage::clearAll);
+    return card;
+}
+
+// ------------------------------------------------------------- page hooks
+
+void ReadPage::onActivated()
+{
+    m_active = true;
+    setSource(m_source ? m_source->currentIndex() : 1);
+}
+
+void ReadPage::onDeactivated()
+{
+    m_active = false;
+    m_camera->setActive(false);
+}
 
 bool ReadPage::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_image && event->type() == QEvent::Resize)
         showImage();
-    return QWidget::eventFilter(watched, event);
+    return PageBase::eventFilter(watched, event);
+}
+
+// ------------------------------------------------------------------ source
+
+void ReadPage::setSource(int index)
+{
+    if (m_stack)
+        m_stack->setCurrentIndex(index == 1 ? 1 : 0);
+    m_camera->setActive(false);
 }
 
 void ReadPage::browse()
 {
-    if (m_reader) {                 // clicking the picture while scanning = cancel
-        stopCamera();
-        m_caption->setText("Camera stopped   " + QString(kMiddleDot)
-                           + "   click or drop to choose another");
-        m_banner->showMessage("Camera stopped.", Banner::Info);
-        return;
-    }
-
-    QString start = GeneratePage::outputDir();     // where our own barcodes are saved
-    if (!QDir(start).exists())
-        start = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
-
     const QString path = QFileDialog::getOpenFileName(
-        this, "Choose a barcode image", start,
+        this, "Choose a barcode image", m_lastDir,
         "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;All files (*)");
-    if (!path.isEmpty())
-        loadFile(path);
+    if (path.isEmpty())
+        return;
+    m_lastDir = QFileInfo(path).absolutePath();
+    loadFile(path);
 }
 
 void ReadPage::loadFile(const QString& path)
 {
-    stopCamera();
     const QFileInfo info(path);
     if (!info.isFile() || !isImageSuffix(info.suffix())) {
-        m_banner->showMessage("Please choose an image file (PNG, JPG or BMP).", Banner::Error);
+        showError("Please choose an image file (PNG, JPG or BMP).");
         return;
     }
 
     const QPixmap pixmap(path);
     if (pixmap.isNull()) {
-        m_banner->showMessage("That image could not be opened.", Banner::Error);
+        showError("That image could not be opened.");
         return;
     }
 
     m_pixmap = pixmap;
-    m_caption->setText(info.fileName() + "   " + kMiddleDot + "   click or drop to choose another");
+    m_caption->setText(info.fileName());
     showImage();
-
-    decode(path);
-}
-
-void ReadPage::decode(const QString& path)
-{
-    const QString fileName = QFileInfo(path).fileName();
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
     const std::optional<std::string> result = readBarcodeFile(toNativePath(path));
     QApplication::restoreOverrideCursor();
 
-    m_fileName->setText(fileName);
-
     if (result.has_value() && !result->empty()) {
-        const QString value = QString::fromStdString(*result);
-        showResult(value);
-        m_banner->showMessage("Barcode read successfully.", Banner::Success);
+        showDigits(qs(*result));
     } else {
         clearResult();
-        m_banner->showMessage("No valid Code 128 barcode was found in this image. Try a "
-                              "sharper picture where the whole barcode is visible.",
-                              Banner::Error);
+        showError("No valid Code 128 barcode found. Try a sharper picture "
+                  "where the whole barcode is visible.");
     }
 }
 
@@ -307,149 +243,67 @@ void ReadPage::showImage()
         m_image->setPixmap(fitPixmap(m_pixmap, m_image->size()));
 }
 
-void ReadPage::showResult(const QString& value)
+void ReadPage::onCameraScanned(const QString& digits)
 {
-    m_lastValue = value;
-    m_resultValue->setText(value);
-    m_resultValue->setProperty("empty", false);
-    repolish(m_resultValue);
+    if (digits != m_digits)                      // the camera repeats the same read
+        showDigits(digits);
+}
+
+void ReadPage::onCameraFailed(const QString& message)
+{
+    showError(message);
+    if (m_source) {                              // fall back to the image source
+        setSource(0);
+        m_source->setCurrentIndex(0);
+    }
+}
+
+// ------------------------------------------------------------------ result
+
+void ReadPage::showDigits(const QString& digits)
+{
+    m_banner->clearMessage();
+    m_digits = digits;
+    m_value->setText(digits);
+    m_value->setProperty("empty", false);
+    repolish(m_value);
     m_copyBtn->setEnabled(true);
+
+    if (const auto product = m_services.catalog().lookup(ss(digits)))
+        m_details->showProduct(*product);
+    else
+        m_details->showMessage("No product has this barcode");
 }
 
 void ReadPage::clearResult()
 {
-    m_lastValue.clear();
-    m_resultValue->setText("- - - - - -");
-    m_resultValue->setProperty("empty", true);
-    repolish(m_resultValue);
+    m_digits.clear();
+    m_value->setText("- - - - - -");
+    m_value->setProperty("empty", true);
+    repolish(m_value);
     m_copyBtn->setEnabled(false);
-}
-
-void ReadPage::copyValue(const QString& value)
-{
-    if (value.isEmpty())
-        return;
-    QGuiApplication::clipboard()->setText(value);
-    m_banner->showMessage("Copied " + value + " to the clipboard.", Banner::Info);
+    m_details->clear();
 }
 
 void ReadPage::clearAll()
 {
-    stopCamera();
-    m_pixmap = QPixmap();
-    m_image->clear();
-    m_fileName->clear();
-    m_banner->clearMessage();
     clearResult();
-    showImage();
-}
-
-void ReadPage::clearPage()
-{
-    clearAll();
-    m_caption->clear();
-}
-
-void ReadPage::hideEvent(QHideEvent* event)
-{
-    stopCamera();                   // never keep the webcam on in the background
-    QWidget::hideEvent(event);
-}
-
-// ------------------------------------------------------------------- webcam
-
-void ReadPage::startCamera()
-{
-    if (m_reader)
-        return;
-
-    clearAll();                                        // also resets any old result
-    m_reader = std::make_unique<CameraReader>();
-    m_reader->start(0);                                // opens the camera in the background
-    m_lastScanId = 0;
-    m_box = QRect();
-    m_pendingValue.clear();
-    m_pendingHits = 0;
-    m_missCount = 0;
-    m_caption->setText("Hold the barcode flat in front of the camera   " + QString(kMiddleDot)
-                       + "   click to cancel");
-    m_banner->showMessage("Starting the camera" + QString(kEllipsis), Banner::Info);
-    m_cameraTimer->start();
-}
-
-void ReadPage::stopCamera()
-{
-    if (m_cameraTimer)
-        m_cameraTimer->stop();
-    m_reader.reset();
-    m_box = QRect();
-}
-
-// Only shows the newest picture and handles a finished scan: the camera and
-// the barcode search run in CameraReader's own threads, so this stays fast.
-void ReadPage::onCameraTick()
-{
-    if (!m_reader)
-        return;
-
-    const CameraReader::Snapshot snap = m_reader->poll();
-    if (snap.failed) {
-        stopCamera();
-        m_banner->showMessage(QString::fromStdString(snap.error), Banner::Error, 4000);
-        return;
+    m_banner->clearMessage();
+    if (m_image) {
+        m_pixmap = QPixmap();
+        showImage();
     }
-    if (snap.frame.empty())                            // camera still starting
+}
+
+void ReadPage::copyDigits()
+{
+    if (m_digits.isEmpty())
         return;
-    const bool newScan = snap.scanId != m_lastScanId;
-    if (!snap.newFrame && !newScan)                    // nothing new to show
-        return;
+    QGuiApplication::clipboard()->setText(m_digits);
+    m_banner->showMessage(QString(kCheck) + "  Copied", Banner::Success);
+}
 
-    if (m_pixmap.isNull())
-        m_banner->clearMessage();                      // removes "Starting the camera"
-
-    const cv::Mat& frame = snap.frame;                 // 8-bit BGR
-    QPixmap pm = QPixmap::fromImage(QImage(frame.data, frame.cols, frame.rows,
-                                           int(frame.step), QImage::Format_BGR888));   // copies the pixels
-
-    if (newScan) {
-        m_lastScanId = snap.scanId;
-        const CameraScanResult& res = snap.scan;
-        const bool hasValue = res.value.has_value() && !res.value->empty();
-        const cv::Rect& shown = (hasValue && res.readBox.area() > 0) ? res.readBox : res.box;
-        m_box = QRect(shown.x, shown.y, shown.width, shown.height);   // amber: candidate / read area
-
-        if (hasValue) {
-            m_missCount = 0;
-            const QString value = QString::fromStdString(*res.value);
-            if (value == m_pendingValue)
-                ++m_pendingHits;
-            else {
-                m_pendingValue = value;
-                m_pendingHits = 1;
-            }
-
-            if (m_pendingHits >= 2) {                  // same number twice = accept
-                // green only around the area the number was really read from
-                // (nothing if it came from the strip sweep, where no area is known)
-                drawBox(pm, QRect(res.readBox.x, res.readBox.y, res.readBox.width, res.readBox.height),
-                        QColor(0x2e, 0xcc, 0x71));
-                m_pixmap = pm;
-                stopCamera();
-                showImage();
-                m_caption->setText("Captured from camera   " + QString(kMiddleDot)
-                                   + "   click or drop to choose another");
-                m_fileName->setText("From camera");
-                showResult(value);
-                m_banner->showMessage("Barcode read successfully.", Banner::Success);
-                return;
-            }
-        } else if (++m_missCount > 4) {                // lost it: forget the candidate
-            m_pendingValue.clear();
-            m_pendingHits = 0;
-        }
-    }
-
-    drawBox(pm, m_box, QColor(0xf5, 0xa6, 0x23));      // amber while still scanning
-    m_pixmap = pm;
-    showImage();
+void ReadPage::showError(const QString& text)
+{
+    m_banner->showMessage(text, Banner::Error, kErrorMs);
 }

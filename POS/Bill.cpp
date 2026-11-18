@@ -4,7 +4,7 @@ using namespace std;
 
 int Bill::counter = 100000000;		//baseId
 
-Bill::Bill(const string& cName, const string& oId, const vector<pair<Product, int>>& items, const string& status) {
+Bill::Bill(const string& cName, const string& oId, const vector<pair<pos::Product, double>>& items, const string& status) {
 	customerName = cName;
 	orderId = oId;
 	products = items;
@@ -16,7 +16,7 @@ Bill::Bill(const string& cName, const string& oId, const vector<pair<Product, in
 	totalDiscount = calcTotalDiscount();
 	totalBill = calcTotalBill();
 	orderStatus = status;
-	billId = to_string(++counter);			
+	billId = to_string(++counter);
 }
 
 void Bill :: setCounter(int value) {
@@ -27,22 +27,22 @@ void Bill :: setCounter(int value) {
 //Calculations
 double Bill::calcTotalWithoutTax() const {
 	double total = 0;
-	for (int i = 0; i < products.size(); i++) {
-		total += products[i].first.getUnitPrice() * products[i].second;
+	for (size_t i = 0; i < products.size(); i++) {
+		total += products[i].first.unitPrice * products[i].second;
 	}
 	return total;
 }
 double Bill::calcTotalTax() const {
 	double total = 0;
-	for (int i = 0; i < products.size(); i++) {
-		total += products[i].first.getTax() * products[i].second;
+	for (size_t i = 0; i < products.size(); i++) {
+		total += products[i].first.tax * products[i].second;
 	}
 	return total;
 }
 double Bill::calcTotalDiscount() const {
 	double total = 0;
-	for (int i = 0; i < products.size(); i++) {
-		total += products[i].first.getDiscount() * products[i].second;
+	for (size_t i = 0; i < products.size(); i++) {
+		total += products[i].first.discount * products[i].second;
 	}
 	return total;
 }
@@ -51,12 +51,10 @@ double Bill::calcTotalBill() const {
 	double tax = calcTotalTax();
 	double disc = calcTotalDiscount();
 	double total = totalWT + tax - disc;
-	if (total < 0) {
+	if (total < -1e-9) {
 		throw invalid_argument("Invalid Bill: Discount exceeds Amount");
 	}
-	else {
-		return total;
-	}
+	return total < 0 ? 0 : total;
 }
 
 //Getters
@@ -69,7 +67,7 @@ const string& Bill::getCustomerName() const {
 const string& Bill::getOrderId() const {
 	return orderId;
 }
-const vector<pair<Product, int>>& Bill::getProducts() const {
+const vector<pair<pos::Product, double>>& Bill::getProducts() const {
 	return products;
 }
 double Bill::getTotalWithoutTax() const {

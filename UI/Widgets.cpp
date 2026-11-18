@@ -6,11 +6,9 @@
 #include <QDragLeaveEvent>
 #include <QDropEvent>
 #include <QHBoxLayout>
-#include <QKeyEvent>
 #include <QMimeData>
-#include <QMouseEvent>
 #include <QPainter>
-#include <QPushButton>
+#include <QPainterPath>
 #include <QStyle>
 #include <QTimer>
 #include <QUrl>
@@ -38,15 +36,52 @@ QPixmap fitPixmap(const QPixmap& src, const QSize& area)
     return src.scaled(area, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 }
 
-QFrame* makeCard(QWidget* parent)
+QLabel* makeLabel(const QString& text, const char* objectName, QWidget* parent)
 {
-    auto* card = new QFrame(parent);
-    card->setObjectName("card");
-    return card;
+    auto* label = new QLabel(text, parent);
+    label->setObjectName(objectName);
+    return label;
+}
+
+NeuFrame* makeCard(QWidget* parent)
+{
+    return new NeuFrame(NeuStyle::Raised, 20, parent);
+}
+
+NeuFrame* makeWell(QWidget* parent)
+{
+    auto* well = new NeuFrame(NeuStyle::Inset, 16, parent);
+    well->setDepth(5);
+    return well;
 }
 
 // ===========================================================================
 // IconWidget
+
+namespace {
+
+// Alternating bar / space widths (starts and ends with a bar).
+void drawBars(QPainter& p, const QRectF& area, const QColor& color)
+{
+    static const int kPattern[] = { 2, 1, 1, 2, 3, 1, 1, 1, 2, 2, 1, 3, 2 };
+    int total = 0;
+    for (int u : kPattern)
+        total += u;
+
+    const qreal unit = area.width() / total;
+    qreal x = area.left();
+    bool bar = true;
+    p.setPen(Qt::NoPen);
+    p.setBrush(color);
+    for (int u : kPattern) {
+        if (bar)
+            p.drawRect(QRectF(x, area.top(), u * unit, area.height()));
+        x += u * unit;
+        bar = !bar;
+    }
+}
+
+} // namespace
 
 IconWidget::IconWidget(Kind kind, int size, QWidget* parent)
     : QWidget(parent), m_kind(kind)
@@ -55,61 +90,127 @@ IconWidget::IconWidget(Kind kind, int size, QWidget* parent)
     setAttribute(Qt::WA_TransparentForMouseEvents);
 }
 
+void IconWidget::setMuted(bool muted)
+{
+    m_muted = muted;
+    update();
+}
+
 void IconWidget::paintEvent(QPaintEvent*)
 {
+    const Theme::Colors& c = Theme::colors();
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
+    p.scale(width() / 100.0, height() / 100.0);     // draw in a 100 x 100 box
 
-    const Theme::Colors& c = Theme::colors();
-    const qreal w = width();
+    const QColor ink = m_muted ? c.muted : c.accent;
+    QPen stroke(ink, 6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
 
-    // Rounded tile.
-    QColor tile = c.accent;
-    tile.setAlpha(Theme::isDark() ? 48 : 34);
-    p.setPen(Qt::NoPen);
-    p.setBrush(tile);
-    p.drawRoundedRect(QRectF(0, 0, w, w), w * 0.26, w * 0.26);
+    switch (m_kind) {
+    case Logo:
+        p.setPen(Qt::NoPen);
+        p.setBrush(c.accent);
+        p.drawRoundedRect(QRectF(0, 0, 100, 100), 26, 26);
+        drawBars(p, QRectF(22, 22, 56, 56), c.onAccent);
+        break;
 
-    // Bars: alternating bar / space widths (starts and ends with a bar).
-    static const int kPattern[] = { 2, 1, 1, 2, 3, 1, 1, 1, 2, 2, 1, 3, 2 };
-    int total = 0;
-    for (int u : kPattern)
-        total += u;
-
-    const qreal pad = w * 0.22;
-    const QRectF inner(pad, pad, w - 2 * pad, w - 2 * pad);
-    const qreal unit = inner.width() / total;
-
-    qreal x = inner.left();
-    bool bar = true;
-    p.setBrush(c.accent);
-    for (int u : kPattern) {
-        if (bar)
-            p.drawRect(QRectF(x, inner.top(), u * unit, inner.height()));
-        x += u * unit;
-        bar = !bar;
+    case Generate: {
+        drawBars(p, QRectF(10, 20, 68, 60), ink);
+        p.setPen(Qt::NoPen);
+        p.setBrush(c.bg);
+        p.drawEllipse(QPointF(76, 74), 22, 22);            // ring that separates the badge
+        p.setBrush(ink);
+        p.drawEllipse(QPointF(76, 74), 17, 17);
+        p.setPen(QPen(c.onAccent, 5, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(68, 74), QPointF(84, 74));
+        p.drawLine(QPointF(76, 66), QPointF(76, 82));
+        break;
     }
 
-    if (m_kind == Scan) {
-        // Red scan line with a soft glow.
-        const qreal y = inner.center().y();
+    case Scan: {
+        drawBars(p, QRectF(14, 22, 72, 56), ink);
+        p.setPen(Qt::NoPen);
         QColor glow = c.danger;
         glow.setAlpha(70);
         p.setBrush(glow);
-        p.drawRoundedRect(QRectF(pad * 0.5, y - w * 0.06, w - pad, w * 0.12), w * 0.06, w * 0.06);
+        p.drawRoundedRect(QRectF(6, 44, 88, 12), 6, 6);
         p.setBrush(c.danger);
-        p.drawRoundedRect(QRectF(pad * 0.5, y - w * 0.015, w - pad, w * 0.03), w * 0.015, w * 0.015);
-    } else if (m_kind == Generate) {
-        // "+" badge in the bottom-right corner.
-        const QPointF centre(w * 0.78, w * 0.78);
-        const qreal r = w * 0.19;
-        p.setBrush(c.surface);
-        p.drawEllipse(centre, r * 1.28, r * 1.28);
-        p.setBrush(c.accent);
-        p.drawEllipse(centre, r, r);
-        p.setPen(QPen(Qt::white, w * 0.045, Qt::SolidLine, Qt::RoundCap));
-        p.drawLine(QPointF(centre.x() - r * 0.5, centre.y()), QPointF(centre.x() + r * 0.5, centre.y()));
-        p.drawLine(QPointF(centre.x(), centre.y() - r * 0.5), QPointF(centre.x(), centre.y() + r * 0.5));
+        p.drawRoundedRect(QRectF(6, 48.5, 88, 3), 1.5, 1.5);
+        break;
+    }
+
+    case Cashier: {                                         // cash register
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(QRectF(28, 12, 44, 24), 6, 6);    // display
+        p.drawRoundedRect(QRectF(12, 42, 76, 46), 8, 8);    // body
+        p.setPen(Qt::NoPen);
+        p.setBrush(ink);
+        for (int row = 0; row < 2; ++row)
+            for (int col = 0; col < 3; ++col)
+                p.drawEllipse(QPointF(34 + col * 16, 58 + row * 16), 4, 4);
+        break;
+    }
+
+    case Manager: {                                         // dashboard tiles
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(QRectF(14, 14, 30, 30), 7, 7);
+        p.drawRoundedRect(QRectF(56, 14, 30, 30), 7, 7);
+        p.drawRoundedRect(QRectF(14, 56, 30, 30), 7, 7);
+        p.setPen(Qt::NoPen);
+        p.setBrush(ink);
+        p.drawRoundedRect(QRectF(56, 56, 30, 30), 7, 7);
+        break;
+    }
+
+    case Order: {                                           // receipt
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        QPainterPath receipt;
+        receipt.moveTo(24, 12);
+        receipt.lineTo(76, 12);
+        receipt.lineTo(76, 88);
+        receipt.lineTo(67, 80);
+        receipt.lineTo(58, 88);
+        receipt.lineTo(50, 80);
+        receipt.lineTo(42, 88);
+        receipt.lineTo(33, 80);
+        receipt.lineTo(24, 88);
+        receipt.closeSubpath();
+        p.drawPath(receipt);
+        p.drawLine(QPointF(36, 34), QPointF(64, 34));
+        p.drawLine(QPointF(36, 50), QPointF(64, 50));
+        p.drawLine(QPointF(36, 66), QPointF(52, 66));
+        break;
+    }
+
+    case Products: {                                        // box
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        QPainterPath box;
+        box.moveTo(50, 10);
+        box.lineTo(86, 30);
+        box.lineTo(86, 70);
+        box.lineTo(50, 90);
+        box.lineTo(14, 70);
+        box.lineTo(14, 30);
+        box.closeSubpath();
+        p.drawPath(box);
+        p.drawLine(QPointF(50, 50), QPointF(14, 30));
+        p.drawLine(QPointF(50, 50), QPointF(86, 30));
+        p.drawLine(QPointF(50, 50), QPointF(50, 90));
+        break;
+    }
+
+    case Camera: {
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(QRectF(10, 28, 80, 56), 10, 10);
+        p.drawRoundedRect(QRectF(34, 14, 26, 14), 4, 4);
+        p.drawEllipse(QPointF(50, 56), 17, 17);
+        break;
+    }
     }
 }
 
@@ -130,22 +231,24 @@ Banner::Banner(QWidget* parent)
 
 void Banner::showMessage(const QString& text, Kind kind, int timeoutMs)
 {
-    QString k = "info";
-    if (kind == Success)
-        k = "success";
-    else if (kind == Error)
-        k = "error";
+    QString name = "info";
+    QString symbol = "i";
+    switch (kind) {
+    case Success: name = "success"; symbol = QString(kCheck); break;
+    case Warning: name = "warning"; symbol = "!"; break;
+    case Error:   name = "error";   symbol = QString(kCross); break;
+    case Info:    break;
+    }
 
-    setProperty("kind", k);
+    setProperty("kind", name);
     repolish(this);
-    setText(text);
+    setText(symbol + "   " + text);
     show();
 
-    if (timeoutMs > 0) {
+    if (timeoutMs > 0)
         m_timer->start(timeoutMs);
-    } else {
+    else
         m_timer->stop();
-    }
 }
 
 void Banner::clearMessage()
@@ -159,34 +262,19 @@ void Banner::clearMessage()
 // ===========================================================================
 // PageHeader
 
-PageHeader::PageHeader(const QString& title, const QString& subtitle, QWidget* parent)
+PageHeader::PageHeader(const QString& title, QWidget* parent)
     : QWidget(parent)
 {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(4);
 
-    auto* back = new QPushButton(QString(kArrowLeft) + "  Menu", this);
-    back->setObjectName("ghost");
-    back->setCursor(Qt::PointingHandCursor);
-    back->setToolTip("Back to the main menu (Esc)");
-    connect(back, &QPushButton::clicked, this, &PageHeader::backClicked);
+    m_title = makeLabel(title, "pageTitle", this);
+    layout->addWidget(m_title);
+}
 
-    auto* backRow = new QHBoxLayout;
-    backRow->setContentsMargins(0, 0, 0, 0);
-    backRow->addWidget(back);
-    backRow->addStretch(1);
-
-    auto* titleLabel = new QLabel(title, this);
-    titleLabel->setObjectName("pageTitle");
-
-    auto* subLabel = new QLabel(subtitle, this);
-    subLabel->setObjectName("subtitle");
-    subLabel->setWordWrap(true);
-
-    layout->addLayout(backRow);
-    layout->addWidget(titleLabel);
-    layout->addWidget(subLabel);
+void PageHeader::setTitle(const QString& title)
+{
+    m_title->setText(title);
 }
 
 // ===========================================================================
@@ -194,83 +282,52 @@ PageHeader::PageHeader(const QString& title, const QString& subtitle, QWidget* p
 
 ActionCard::ActionCard(IconWidget::Kind icon, const QString& title, const QString& text,
                        QWidget* parent)
-    : QFrame(parent)
+    : NeuFrame(NeuStyle::Raised, 26, parent)
 {
-    setObjectName("actionCard");
-    setCursor(Qt::PointingHandCursor);
-    setFocusPolicy(Qt::StrongFocus);
-    setAttribute(Qt::WA_Hover, true);
+    setDepth(8);
+    setInteractive(true);
 
     auto* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(28, 28, 28, 24);
-    layout->setSpacing(8);
+    layout->setContentsMargins(28, 26, 28, 26);
+    layout->setSpacing(6);
 
-    auto* iconWidget = new IconWidget(icon, 64, this);
-
-    auto* titleLabel = new QLabel(title, this);
-    titleLabel->setObjectName("cardTitle");
-
-    auto* textLabel = new QLabel(text, this);
-    textLabel->setObjectName("cardText");
+    auto* iconWidget = new IconWidget(icon, 72, this);
+    auto* titleLabel = makeLabel(title, "cardTitle", this);
+    auto* textLabel = makeLabel(text, "cardText", this);
     textLabel->setWordWrap(true);
 
-    auto* linkLabel = new QLabel(QString("Open  ") + kArrowRight, this);
-    linkLabel->setObjectName("cardLink");
-
     layout->addWidget(iconWidget);
-    layout->addSpacing(8);
+    layout->addSpacing(14);
     layout->addWidget(titleLabel);
     layout->addWidget(textLabel);
     layout->addStretch(1);
-    layout->addWidget(linkLabel);
 
     // Let clicks on the labels reach the card itself.
-    for (QLabel* l : { titleLabel, textLabel, linkLabel })
+    for (QLabel* l : { titleLabel, textLabel })
         l->setAttribute(Qt::WA_TransparentForMouseEvents);
-}
-
-void ActionCard::mousePressEvent(QMouseEvent* event)
-{
-    event->accept();    // so that the release event comes to us
-}
-
-void ActionCard::mouseReleaseEvent(QMouseEvent* event)
-{
-    if (event->button() == Qt::LeftButton && rect().contains(event->position().toPoint())) {
-        clearFocus();
-        emit clicked();
-    }
-    QFrame::mouseReleaseEvent(event);
-}
-
-void ActionCard::keyPressEvent(QKeyEvent* event)
-{
-    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter
-        || event->key() == Qt::Key_Space) {
-        emit clicked();
-        return;
-    }
-    QFrame::keyPressEvent(event);
 }
 
 // ===========================================================================
 // DropZone
 
 DropZone::DropZone(QWidget* parent)
-    : QFrame(parent)
+    : NeuFrame(NeuStyle::Inset, 20, parent)
 {
-    setObjectName("dropZone");
+    setDepth(5);
     setAcceptDrops(true);
     setCursor(Qt::PointingHandCursor);
-    setProperty("dragging", false);
+    setOutline(NeuOutline::Muted, Qt::DashLine);
+
+    // Inset surface: clicking is handled here, without the pressed look.
+    setInteractive(true);
+    setNeuStyle(NeuStyle::Inset);
 }
 
 void DropZone::dragEnterEvent(QDragEnterEvent* event)
 {
     const QMimeData* mime = event->mimeData();
     if (mime->hasUrls() && !mime->urls().isEmpty() && mime->urls().first().isLocalFile()) {
-        setProperty("dragging", true);
-        repolish(this);
+        setOutline(NeuOutline::Accent, Qt::DashLine);
         event->acceptProposedAction();
         return;
     }
@@ -279,31 +336,17 @@ void DropZone::dragEnterEvent(QDragEnterEvent* event)
 
 void DropZone::dragLeaveEvent(QDragLeaveEvent* event)
 {
-    setProperty("dragging", false);
-    repolish(this);
+    setOutline(NeuOutline::Muted, Qt::DashLine);
     event->accept();
 }
 
 void DropZone::dropEvent(QDropEvent* event)
 {
-    setProperty("dragging", false);
-    repolish(this);
+    setOutline(NeuOutline::Muted, Qt::DashLine);
 
     const QMimeData* mime = event->mimeData();
     if (mime->hasUrls() && !mime->urls().isEmpty()) {
         event->acceptProposedAction();
         emit fileDropped(mime->urls().first().toLocalFile());
     }
-}
-
-void DropZone::mousePressEvent(QMouseEvent* event)
-{
-    event->accept();
-}
-
-void DropZone::mouseReleaseEvent(QMouseEvent* event)
-{
-    if (event->button() == Qt::LeftButton && rect().contains(event->position().toPoint()))
-        emit clicked();
-    QFrame::mouseReleaseEvent(event);
 }

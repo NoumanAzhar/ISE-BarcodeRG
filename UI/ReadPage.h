@@ -1,72 +1,75 @@
 #pragma once
 
+#include "PageBase.h"
+
 #include <QPixmap>
-#include <QRect>
 #include <QString>
-#include <QWidget>
 
-#include <memory>
-
-class CameraReader;
+namespace pos { class AppServices; }
 
 class Banner;
+class CameraScannerWidget;
 class DropZone;
+class NeuButton;
+class NeuSegmented;
+class ProductDetailsView;
 class QLabel;
-class QPushButton;
-class QTimer;
+class QStackedWidget;
 
-// Page 2: drop or choose a barcode image -> the 6-digit number is decoded and shown.
-// A camera button can also scan a barcode live from the webcam.
-class ReadPage : public QWidget {
+// ImageAndCamera: manager's "Read" (image file or camera).
+// CameraOnly:     cashier's "Scan Product" (camera only).
+enum class ReadMode { ImageAndCamera, CameraOnly };
+
+// Reads a barcode from an image or the camera and shows its digits together
+// with the product specification from Product.txt.
+class ReadPage : public PageBase {
     Q_OBJECT
 public:
-    explicit ReadPage(QWidget* parent = nullptr);
-    ~ReadPage() override;
-    void clearPage();
+    ReadPage(pos::AppServices& services, ReadMode mode, QWidget* parent = nullptr);
 
-signals:
-    void backRequested();
+    void onActivated() override;
+    void onDeactivated() override;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
-    void hideEvent(QHideEvent* event) override;
 
 private:
+    QWidget* buildSourceCard();
+    QWidget* buildDropZone();
+    QWidget* buildResultCard();
+
+    void setSource(int index);              // 0 = image, 1 = camera
     void browse();
     void loadFile(const QString& path);
-    void decode(const QString& path);
     void showImage();
-    void showResult(const QString& value);
+    void showDigits(const QString& digits);
+    void onCameraScanned(const QString& digits);
+    void onCameraFailed(const QString& message);
     void clearResult();
-    void copyValue(const QString& value);
     void clearAll();
+    void copyDigits();
+    void showError(const QString& text);
 
-    // webcam
-    void startCamera();
-    void stopCamera();
-    void onCameraTick();
+    pos::AppServices& m_services;
+    ReadMode m_mode;
+    bool m_active = false;                  // between onActivated and onDeactivated
 
+    // source card
+    NeuSegmented* m_source = nullptr;       // null in CameraOnly mode
+    QStackedWidget* m_stack = nullptr;      // null in CameraOnly mode
+    CameraScannerWidget* m_camera = nullptr;
     DropZone* m_drop = nullptr;
     QWidget* m_placeholder = nullptr;
     QLabel* m_image = nullptr;
     QLabel* m_caption = nullptr;
 
-    QLabel* m_resultValue = nullptr;
-    QLabel* m_fileName = nullptr;
+    // result card
+    QLabel* m_value = nullptr;
+    ProductDetailsView* m_details = nullptr;
     Banner* m_banner = nullptr;
-    QPushButton* m_copyBtn = nullptr;
-    QPushButton* m_clearBtn = nullptr;
-    QPushButton* m_cameraBtn = nullptr;
+    NeuButton* m_copyBtn = nullptr;
 
-    QPixmap m_pixmap;       // the image currently shown
-    QString m_lastValue;    // the last decoded number
-
-    std::unique_ptr<CameraReader> m_reader;    // non-null while the camera is on (barcode_reader.h)
-    QTimer* m_cameraTimer = nullptr;
-    int m_lastScanId = 0;       // last scan result already handled
-
-    QRect m_box;                // where the last scan found a barcode (frame coordinates)
-    QString m_pendingValue;     // a number is only accepted after two matching reads
-    int m_pendingHits = 0;
-    int m_missCount = 0;
+    QPixmap m_pixmap;                       // the image currently shown
+    QString m_digits;                       // the digits currently shown
+    QString m_lastDir;                      // start folder of the file dialog
 };
