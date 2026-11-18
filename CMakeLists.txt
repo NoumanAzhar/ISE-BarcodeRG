@@ -9,33 +9,35 @@ set(CMAKE_AUTORCC ON)
 find_package(OpenCV REQUIRED)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-file(GLOB SOURCES CONFIGURE_DEPENDS
-    *.cpp *.h *.ui *.qrc
-    src/*.cpp src/*.h src/*.ui src/*.qrc
-    ui/*.cpp ui/*.h ui/*.ui ui/*.qrc)
+# backend: barcode + POS code, no Qt, shared by the app and the tests
+file(GLOB BACKEND_SOURCES CONFIGURE_DEPENDS
+    Barcode/*.cpp Barcode/*.h
+    POS/*.cpp POS/*.h)
 
-list(FILTER SOURCES EXCLUDE REGEX "test_roundtrip\\.cpp$")
+add_library(backend STATIC ${BACKEND_SOURCES})
+target_include_directories(backend PUBLIC
+    ${CMAKE_SOURCE_DIR}/Barcode
+    ${CMAKE_SOURCE_DIR}/POS)
+target_link_libraries(backend PUBLIC ${OpenCV_LIBS})
+target_compile_definitions(backend PUBLIC
+    "DATA_DIR=\"${CMAKE_SOURCE_DIR}/Data\"")
 
-add_executable(app ${SOURCES})
+# app.exe
+file(GLOB UI_SOURCES CONFIGURE_DEPENDS
+    UI/*.cpp UI/*.h UI/*.ui UI/*.qrc)
 
+add_executable(app main.cpp ${UI_SOURCES})
 target_include_directories(app PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/ui
+    ${CMAKE_SOURCE_DIR}/UI
     ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(app PRIVATE backend Qt6::Widgets)
+# folder that holds data/ while developing (main.cpp falls back to the .exe folder)
+target_compile_definitions(app PRIVATE
+    "APP_ROOT=\"${CMAKE_SOURCE_DIR}\"")
 
-target_link_libraries(app PRIVATE ${OpenCV_LIBS} Qt6::Widgets)
-
-add_executable(roundtrip_test
-    src/test_roundtrip.cpp
-    src/code128.cpp
-    src/barcode_render.cpp
-    src/barcode_reader.cpp
-    src/barcode_decode.cpp
-    src/image_prep.cpp)
-
-target_include_directories(roundtrip_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(roundtrip_test PRIVATE ${OpenCV_LIBS})
+# tests: one program built from Testing/Test.cpp
+add_executable(Test Testing/Test.cpp)
+target_link_libraries(Test PRIVATE backend)
 
 if(WIN32)
   find_program(WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin")
