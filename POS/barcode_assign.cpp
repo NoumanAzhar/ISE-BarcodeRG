@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <set>
+#include <random>
 #include <system_error>
 #include <utility>
 using namespace std;
@@ -30,26 +31,28 @@ namespace pos {
 			}
 		}
 
-		// give the others the next free number
-		int next = 100001;
+		// give the others a random 6-digit number that is not used yet
+		random_device seed;
+		mt19937 engine(seed());
+		uniform_int_distribution<int> pick(100000, 999999);
 		for (size_t i = 0; i < products.size(); ++i)
 		{
 			if (usable[i]) continue;
 
-			while (next <= 999999 && used.count(to_string(next)))
-			{
-				++next;
-			}
-			if (next > 999999) {
+			if (used.size() >= 900000) {
 				++report.failed;
 				report.messages.push_back("No free barcode left for product " + products[i].id);
 				continue;
 			}
-			products[i].barcode = to_string(next);
-			used.insert(products[i].barcode);
+			string code;
+			do {
+				code = to_string(pick(engine));
+			} while (used.count(code));
+
+			products[i].barcode = code;
+			used.insert(code);
 			usable[i] = true;
 			isNew[i] = true;
-			++next;
 		}
 
 		// make sure every barcode has an image
