@@ -56,6 +56,8 @@ namespace pos {
         virtual std::optional<Order> findById(const std::string& id) const = 0;
         virtual std::vector<Order> all() const = 0;
         virtual int count() const = 0;
+        // true if the product appears in any saved order (it has been sold)
+        virtual bool containsProduct(const std::string& productId) const = 0;
     };
 
     class FileOrderRepository : public IOrderRepository {
@@ -65,6 +67,7 @@ namespace pos {
         std::optional<Order> findById(const std::string& id) const override;
         std::vector<Order> all() const override;
         int count() const override;
+        bool containsProduct(const std::string& productId) const override;
 
     private:
         std::string orderFile_;

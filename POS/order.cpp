@@ -224,6 +224,14 @@ namespace pos {
 		return nullopt;
 	}
 
+	bool FileOrderRepository::containsProduct(const string& productId) const
+	{
+		for (const Record& row : readRecords(detailFile_)) {
+			if (row.size() > 1 && row[1] == productId) return true;
+		}
+		return false;
+	}
+
 	int FileOrderRepository::count() const
 	{
 		return static_cast<int>(readRecords(orderFile_).size());

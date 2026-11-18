@@ -163,6 +163,7 @@ QLineEdit[neu="true"] {
     font-size: 15px; font-weight: 500;
 }
 QLineEdit[neu="true"]:focus { border: none; }
+QLineEdit[neu="true"][locked="true"] { color: @muted; }
 QLineEdit[neu="true"][large="true"] { font-size: 26px; font-weight: 600; }
 
 /* ---- lists and tables (put them inside an inset well) ---- */

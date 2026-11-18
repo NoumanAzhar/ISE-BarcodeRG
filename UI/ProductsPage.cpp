@@ -386,6 +386,11 @@ void ProductsPage::editSelected()
     ProductEditDialog dialog(m_services, *it, this);
     if (dialog.exec() == QDialog::Accepted) {
         reload();
+        if (dialog.wasDeleted()) {
+            selectById(QString());
+            m_banner->showMessage("Product deleted", Banner::Success);
+            return;
+        }
         selectById(qs(id));
         m_banner->showMessage("Product updated successfully", Banner::Success);
     }

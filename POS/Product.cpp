@@ -88,6 +88,13 @@ namespace pos {
             return true;
         }
 
+        string upper(string text)
+        {
+            for (size_t i = 0; i < text.length(); i++)
+                text[i] = static_cast<char>(toupper(static_cast<unsigned char>(text[i])));
+            return text;
+        }
+
         string makeProductId(int number)
         {
             char buffer[16];
@@ -134,6 +141,22 @@ namespace pos {
         }
 
     } // anonymous namespace
+
+    bool isValidAcronym(const string& acronym)
+    {
+        if (acronym.length() < kMinAcronym || acronym.length() > kMaxAcronym)
+            return false;
+        bool hasLetter = false;
+        for (size_t i = 0; i < acronym.length(); i++)
+        {
+            const char c = acronym[i];
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
+                hasLetter = true;
+            else if (c < '0' || c > '9')
+                return false;
+        }
+        return hasLetter;
+    }
 
     // ---- FileProductRepository ----
 
@@ -189,6 +212,20 @@ namespace pos {
         {
             if (!data[i].empty() && data[i][0] == product.id)
             {
+                const optional<Product> stored = makeProduct(data[i]);
+                if (stored)
+                {
+                    if (stored->unit != product.unit)
+                        return false;                       // the measurement unit never changes
+                    if (upper(stored->acronym) != upper(product.acronym))
+                    {
+                        if (!isValidAcronym(product.acronym))
+                            return false;
+                        for (size_t j = 0; j < data.size(); j++)
+                            if (j != i && data[j].size() > 2 && upper(data[j][2]) == upper(product.acronym))
+                                return false;               // acronym already used
+                    }
+                }
                 data[i] = producttoRecord(product);
                 return writeRecords(path_, data);
             }
@@ -199,6 +236,14 @@ namespace pos {
     bool FileProductRepository::add(Product& product)
     {
         vector<Record> data = readRecords(path_);
+        if (!isValidAcronym(product.acronym))
+            return false;
+        product.acronym = upper(product.acronym);
+        for (size_t i = 0; i < data.size(); i++)
+        {
+            if (data[i].size() > 2 && upper(data[i][2]) == product.acronym)
+                return false;                               // acronym already used
+        }
         if (product.id.empty())
         {
             int maxId = 0;
@@ -224,6 +269,37 @@ namespace pos {
         }
         data.push_back(producttoRecord(product));
         return writeRecords(path_, data);
+    }
+
+    optional<Product> FileProductRepository::findByAcronym(const string& acronym) const
+    {
+        const string wanted = upper(acronym);
+        vector<Record> data = readRecords(path_);
+        for (size_t i = 0; i < data.size(); i++)
+        {
+            if (data[i].size() > 2 && upper(data[i][2]) == wanted)
+                return makeProduct(data[i]);
+        }
+        return nullopt;
+    }
+
+    bool FileProductRepository::remove(const string& id)
+    {
+        vector<Record> data = readRecords(path_);
+        vector<Record> kept;
+        bool found = false;
+        for (size_t i = 0; i < data.size(); i++)
+        {
+            if (!data[i].empty() && data[i][0] == id)
+            {
+                found = true;
+                continue;
+            }
+            kept.push_back(data[i]);
+        }
+        if (!found)
+            return false;
+        return writeRecords(path_, kept);
     }
 
     bool FileProductRepository::assignIDs()
