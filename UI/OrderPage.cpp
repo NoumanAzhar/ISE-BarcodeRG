@@ -287,7 +287,7 @@ void OrderPage::generateBill()
     m_camera->setActive(false);
     const CheckoutFlow::Outcome outcome =
         CheckoutFlow(m_services).run(name, m_contact->text().trimmed(), this);
-    if (m_active)
+    if (m_active && cameraWasOn)
         m_camera->setActive(true);
 
     switch (outcome.result) {
