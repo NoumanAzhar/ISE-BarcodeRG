@@ -363,11 +363,16 @@ void OrderPage::generateBill()
         return;
     }
 
-	const bool cameraWasOn = m_camera->isActive();
+    const bool cameraWasOn = m_camera->isActive();
     m_camera->setActive(false);
     const CheckoutFlow::Outcome outcome =
         CheckoutFlow(m_services).run(name, contact, this);
-    if (m_active && cameraWasOn)
+
+    // After a bill was generated the camera stays off (the cashier starts it again for the next
+    // customer). If the payment was cancelled or failed, the order goes on, so the camera comes back.
+    const bool billGenerated = outcome.result == CheckoutFlow::Result::Saved
+                            || outcome.result == CheckoutFlow::Result::SavedWithWarning;
+    if (m_active && cameraWasOn && !billGenerated)
         m_camera->setActive(true);
 
     switch (outcome.result) {

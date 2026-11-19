@@ -5,6 +5,7 @@
 #include "Widgets.h"
 #include "barcode_reader.h"
 
+#include <QApplication>
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QHideEvent>
@@ -16,6 +17,17 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <thread>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 namespace {
 
 constexpr int kTickMs = 30;
@@ -23,6 +35,18 @@ constexpr qint64 kSameCodeGapMs = 700;    // out of the picture at least this lo
 constexpr qint64 kRepeatMs = 2000;        // a held code counts again after this long
 constexpr qint64 kFlashMs = 600;          // how long the green "read" box stays
 constexpr int kMissesBeforeForget = 4;
+constexpr int kBeepHz = 2800;             // classic scanner pitch
+constexpr int kBeepMs = 110;              // one short beep
+
+// The classic one-tone "scanner beep". Played on its own thread so the live picture never stalls.
+void playScanBeep()
+{
+#ifdef _WIN32
+    std::thread([] { Beep(kBeepHz, kBeepMs); }).detach();
+#else
+    QApplication::beep();
+#endif
+}
 
 QRect toQRect(const cv::Rect& r)
 {
@@ -242,6 +266,7 @@ void CameraScannerWidget::accept(const QString& digits, const QRect& readBox)
 
     m_lastEmitted = digits;
     m_lastEmitTime = now;
+    playScanBeep();                       // classic scanner beep for every accepted scan
     emit barcodeScanned(digits);
 }
 
