@@ -56,7 +56,6 @@ OrderItemList::OrderItemList(pos::AppServices& services, QWidget* parent)
     m_empty->setAlignment(Qt::AlignCenter);
 
     m_content = new QWidget;
-    m_content->setAutoFillBackground(false);
     m_rowLayout = new QVBoxLayout(m_content);
     m_rowLayout->setContentsMargins(0, 0, 0, 0);
     m_rowLayout->setSpacing(6);
@@ -68,6 +67,11 @@ OrderItemList::OrderItemList(pos::AppServices& services, QWidget* parent)
     m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scroll->viewport()->setAutoFillBackground(false);
     m_scroll->setWidget(m_content);
+    // QScrollArea::setWidget() switches autoFillBackground back on, which painted the rows' backdrop
+    // in the palette colour (a black box in the light theme). Turn it off again, after setWidget().
+    m_content->setAutoFillBackground(false);
+    m_content->setObjectName("scrollContent");
+    m_content->setStyleSheet("QWidget#scrollContent { background: transparent; }");
 
     wellLayout->addWidget(m_empty, 1);
     wellLayout->addWidget(m_scroll, 1);
