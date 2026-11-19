@@ -11,6 +11,7 @@ namespace pos {
 	inline constexpr const char* kOrderDetailFile = "data/OrderDetail.txt";
 	inline constexpr const char* kBillFile = "data/Bill.txt";
 	inline constexpr int         kBarcodeDigits = 6;
+	inline constexpr size_t      kMinAcronym = 2;
 	inline constexpr size_t      kMaxAcronym = 8;
 
 	// One line of a data file = list of decoded fields.

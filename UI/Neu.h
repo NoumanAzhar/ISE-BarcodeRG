@@ -117,6 +117,10 @@ public:
 
     void setLarge(bool large);                 // big monospace-friendly input
     void setState(const QString& state);       // "valid", "invalid" or "" (none)
+    // Read-only look: faded, dashed ring and a padlock. Cannot be focused or edited.
+    void setLocked(bool locked);
+    bool isLocked() const { return m_locked; }
+    void setLockIconVisible(bool visible);     // hide the padlock; the locked behaviour stays
 
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
@@ -126,6 +130,8 @@ protected:
 
 private:
     bool m_large = false;
+    bool m_locked = false;
+    bool m_showLock = true;
 };
 
 // ---------------------------------------------------------------------------
@@ -139,6 +145,11 @@ public:
     int currentIndex() const { return m_current; }
     void setCurrentIndex(int index);           // emits currentChanged when it changes
     int count() const { return m_labels.size(); }
+
+    // Same locked look as NeuLineEdit; the selection can then only be set from code.
+    void setLocked(bool locked);
+    bool isLocked() const { return m_locked; }
+    void setLockIconVisible(bool visible);     // hide the padlock; the locked behaviour stays
 
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
@@ -159,4 +170,6 @@ private:
     QStringList m_labels;
     int m_current = 0;
     bool m_keyboardFocus = false;
+    bool m_locked = false;
+    bool m_showLock = true;
 };

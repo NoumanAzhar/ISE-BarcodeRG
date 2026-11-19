@@ -21,6 +21,7 @@
 #include <QStandardPaths>
 #include <QStringList>
 #include <QVBoxLayout>
+#include<QDir>
 
 namespace {
 
@@ -37,7 +38,11 @@ bool isImageSuffix(const QString& suffix)
 ReadPage::ReadPage(pos::AppServices& services, ReadMode mode, QWidget* parent)
     : PageBase(parent), m_services(services), m_mode(mode)
 {
-    m_lastDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+    // was : m_lastDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+    const QString barcodeDir = QDir::current().absoluteFilePath("data/barcodes");
+    m_lastDir = QDir(barcodeDir).exists()
+        ? barcodeDir
+        : QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
 
     auto* root = new QHBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -173,6 +178,11 @@ void ReadPage::onDeactivated()
 {
     m_active = false;
     m_camera->setActive(false);
+}
+
+void ReadPage::resetState()
+{
+    clearAll();     // digits, product details, loaded image and messages
 }
 
 bool ReadPage::eventFilter(QObject* watched, QEvent* event)

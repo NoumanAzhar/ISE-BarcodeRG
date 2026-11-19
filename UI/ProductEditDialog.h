@@ -34,6 +34,7 @@ private:
     pos::AppServices& m_services;
     std::optional<pos::Product> m_original;
     std::string m_savedId;
+    bool m_sold = false;       // Edit mode: the product appears in a saved order
 
     NeuLineEdit* m_name = nullptr;
     NeuLineEdit* m_acronym = nullptr;
@@ -43,7 +44,7 @@ private:
     NeuLineEdit* m_discount = nullptr;
     NeuLineEdit* m_stock = nullptr;
     NeuLineEdit* m_barcode = nullptr;
-    NeuButton* m_randomBtn = nullptr;
+    NeuButton* m_randomBtn = nullptr;       // Add mode only
     Banner* m_banner = nullptr;
 };
 

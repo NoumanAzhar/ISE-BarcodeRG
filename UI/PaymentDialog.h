@@ -6,8 +6,8 @@
 #include <QString>
 
 class NeuButton;
-class NeuLineEdit;
 class NeuSegmented;
+class QComboBox;
 
 // Asks how the bill is paid. Accepted only when the payment is confirmed.
 class PaymentDialog : public QDialog {
@@ -16,13 +16,14 @@ public:
     explicit PaymentDialog(double totalPayable, QWidget* parent = nullptr);
 
     pos::PaymentMode mode() const;      // Cash, Card or Wallet
-    QString merchant() const;           // trimmed; empty for Cash
+    QString merchant() const;           // the bank or wallet picked from the list; empty for Cash
 
 private:
     bool needsMerchant() const;
-    void updateState();                 // merchant field visibility, Confirm enabled
+    void updateState();                 // list visibility and contents, Confirm enabled
+    void fillMerchants();               // banks for Card, wallets for Wallet
 
     NeuSegmented* m_mode = nullptr;
-    NeuLineEdit* m_merchant = nullptr;
+    QComboBox* m_merchant = nullptr;    // drop-down only: the cashier cannot type a name
     NeuButton* m_confirm = nullptr;
 };

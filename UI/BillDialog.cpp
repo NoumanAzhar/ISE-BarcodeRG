@@ -96,7 +96,6 @@ BillDialog::BillDialog(const Bill& bill, QWidget* parent)
 
     // Items scroll inside the paper when the list is long.
     auto* items = new QWidget;
-    items->setAutoFillBackground(false);
     auto* itemsLayout = new QVBoxLayout(items);
     itemsLayout->setContentsMargins(0, 4, 0, 4);
     itemsLayout->setSpacing(8);
@@ -127,6 +126,11 @@ BillDialog::BillDialog(const Bill& bill, QWidget* parent)
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->viewport()->setAutoFillBackground(false);
     scroll->setWidget(items);
+    // QScrollArea::setWidget() switches autoFillBackground back on (a black box on the white paper).
+    // Turn it off again, after setWidget(), so the paper shows through.
+    items->setAutoFillBackground(false);
+    items->setObjectName("billItems");
+    items->setStyleSheet("QWidget#billItems { background: transparent; }");
     paperLayout->addWidget(scroll, 1);
 
     paperLayout->addWidget(makeRule(paper));

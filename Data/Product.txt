@@ -1,4 +1,6 @@
-0001|100001|LAYS|Lays|count|50.00|5.00|0.00|34|data/barcodes/100001.png|#
-0002|100002|COCOMO|Cocomo|count|10.00|1.00|0.00|145|data/barcodes/100002.png|#
-0003|100003|7UPDIET|Diet 7up|count|150.00|15.00|5.00|55|data/barcodes/100003.png|#
-0004|100004|7UP|7up|count|150.00|15.00|5.00|55|data/barcodes/100004.png|#
+0001|100001|LAYS|Lays|count|50.00|5.00|0.00|23|data/barcodes/100001.png|#
+0002|100002|COCOMO|Cocomo|count|10.00|1.00|0.00|132|data/barcodes/100002.png|#
+0003|100003|7UPDIET|Diet 7up|count|150.00|15.00|5.00|52|data/barcodes/100003.png|#
+0004|100004|7UP|7up|count|150.00|15.00|5.00|54|data/barcodes/100004.png|#
+0005|554518|LA|layssss|count|50.00|0.00|0.00|5|data/barcodes/554518.png|#
+0006|200548|CK|coke|count|10.00|0.00|0.00|0|data/barcodes/200548.png|#

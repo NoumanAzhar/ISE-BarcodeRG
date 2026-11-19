@@ -56,7 +56,6 @@ OrderItemList::OrderItemList(pos::AppServices& services, QWidget* parent)
     m_empty->setAlignment(Qt::AlignCenter);
 
     m_content = new QWidget;
-    m_content->setAutoFillBackground(false);
     m_rowLayout = new QVBoxLayout(m_content);
     m_rowLayout->setContentsMargins(0, 0, 0, 0);
     m_rowLayout->setSpacing(6);
@@ -68,6 +67,11 @@ OrderItemList::OrderItemList(pos::AppServices& services, QWidget* parent)
     m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_scroll->viewport()->setAutoFillBackground(false);
     m_scroll->setWidget(m_content);
+    // QScrollArea::setWidget() switches autoFillBackground back on, which painted the rows' backdrop
+    // in the palette colour (a black box in the light theme). Turn it off again, after setWidget().
+    m_content->setAutoFillBackground(false);
+    m_content->setObjectName("scrollContent");
+    m_content->setStyleSheet("QWidget#scrollContent { background: transparent; }");
 
     wellLayout->addWidget(m_empty, 1);
     wellLayout->addWidget(m_scroll, 1);
@@ -79,6 +83,20 @@ OrderItemList::OrderItemList(pos::AppServices& services, QWidget* parent)
 QString OrderItemList::selectedProductId() const
 {
     return m_selectedId;
+}
+
+void OrderItemList::clearSelection()
+{
+    select(QString());
+}
+
+bool OrderItemList::isOnRow(const QWidget* widget) const
+{
+    for (const Row& row : std::as_const(m_rowWidgets)) {
+        if (row.frame == widget || row.frame->isAncestorOf(widget))
+            return true;
+    }
+    return false;
 }
 
 // ------------------------------------------------------------------ rows
@@ -172,7 +190,8 @@ void OrderItemList::addRow(const pos::OrderItem& item, const pos::Product& produ
     showQuantity(id, item.quantity);
     styleRow(id);
 
-    connect(frame, &NeuFrame::clicked, this, [this, id]() { select(id); });
+    connect(frame, &NeuFrame::clicked, this,
+            [this, id]() { select(id == m_selectedId ? QString() : id); });   // click again = unselect
     connect(minus, &NeuButton::clicked, this, [this, id]() { step(id, -1); });
     connect(plus, &NeuButton::clicked, this, [this, id]() { step(id, +1); });
     connect(removeBtn, &NeuButton::clicked, this, [this, id]() { remove(id); });

@@ -74,7 +74,14 @@ namespace pos {
         // appends a new product; if id is empty, assigns next 4-digit sequence id;
         // returns false if id already exists or write fails
         virtual bool add(Product& product) = 0;
+        // nullopt if no product has this acronym (case-insensitive)
+        virtual std::optional<Product> findByAcronym(const std::string& acronym) const = 0;
+        // deletes the product with this id; false if not found or the write fails
+        virtual bool remove(const std::string& id) = 0;
     };
+
+    // 2 to 8 characters, letters and digits only, at least one letter.
+    bool isValidAcronym(const std::string& acronym);
 
     // ---- Layer 2: Product.txt implementation ----
     class FileProductRepository : public IProductRepository {
@@ -86,6 +93,8 @@ namespace pos {
         std::vector<Product> all() const override;
         bool update(const Product& product) override;
         bool add(Product& product) override;
+        std::optional<Product> findByAcronym(const std::string& acronym) const override;
+        bool remove(const std::string& id) override;
         bool assignIDs();
 
         // (added, not in the shared interface) messages about malformed lines

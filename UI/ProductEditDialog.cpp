@@ -10,19 +10,42 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPushButton>
+#include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QVBoxLayout>
 
 #include <filesystem>
+#include <system_error>
 #include <random>
 #include <set>
+
+namespace {
+// Heavy, slightly rounded text for the "Product Name" and "Barcode" captions (Add mode).
+// Tries the heavy rounded fonts first, then Segoe UI Black, then plain bold.
+const char* const kStrongLabelStyle =
+    "font-family: 'Arial Rounded MT Bold', 'Nunito Black', 'Nunito', 'Varela Round', "
+    "'Segoe UI Black', 'Segoe UI'; font-weight: 900; font-size: 16px;";
+
+QLabel* makeCaption(const QString& text, bool strong, QWidget* parent)
+{
+    QLabel* label = makeLabel(text, "fieldLabel", parent);
+    if (strong)
+        label->setStyleSheet(kStrongLabelStyle);
+    return label;
+}
+}
 
 ProductEditDialog::ProductEditDialog(pos::AppServices& services,
                                      std::optional<pos::Product> product,
                                      QWidget* parent)
     : QDialog(parent), m_services(services), m_original(product)
 {
-    setWindowTitle(m_original ? "Edit Product" : "Add Product");
+    const bool editing = m_original.has_value();
+    if (editing)
+        m_sold = m_services.orders().containsProduct(m_original->id);
+
+    setWindowTitle(editing ? "Edit Product" : "Add Product");
     setMinimumWidth(480);
 
     auto* layout = new QVBoxLayout(this);
@@ -34,13 +57,12 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     cardLayout->setContentsMargins(20, 18, 20, 18);
     cardLayout->setSpacing(10);
 
-    cardLayout->addWidget(makeLabel(m_original ? "Edit Product Details" : "Add New Product",
-                                    "sectionTitle", card));
+    if (!editing)
+        cardLayout->addWidget(makeLabel("Add New Product", "sectionTitle", card));
 
     // Name
-    cardLayout->addWidget(makeLabel("Product Name *", "fieldLabel", card));
+    cardLayout->addWidget(makeCaption("Product Name", !editing, card));
     m_name = new NeuLineEdit(card);
-    m_name->setPlaceholderText("e.g. Lays Masala");
     cardLayout->addWidget(m_name);
 
     // Acronym & Unit in a horizontal row
@@ -48,10 +70,15 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     row1->setSpacing(12);
 
     auto* colAcronym = new QVBoxLayout;
-    colAcronym->addWidget(makeLabel("Acronym (max 8 chars) *", "fieldLabel", card));
+    colAcronym->addWidget(makeLabel("Acronym", "fieldLabel", card));
     m_acronym = new NeuLineEdit(card);
-    m_acronym->setPlaceholderText("e.g. LAYS");
     m_acronym->setMaxLength(int(pos::kMaxAcronym));
+    m_acronym->setValidator(new QRegularExpressionValidator(QRegularExpression("[A-Za-z0-9]*"), m_acronym));
+    connect(m_acronym, &QLineEdit::textEdited, this, [this](const QString& text) {
+        const int cursor = m_acronym->cursorPosition();
+        m_acronym->setText(text.toUpper());          // acronyms are always upper case
+        m_acronym->setCursorPosition(cursor);
+    });
     colAcronym->addWidget(m_acronym);
 
     auto* colUnit = new QVBoxLayout;
@@ -68,7 +95,7 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     row2->setSpacing(12);
 
     auto* colPrice = new QVBoxLayout;
-    colPrice->addWidget(makeLabel("Unit Price (PKR) *", "fieldLabel", card));
+    colPrice->addWidget(makeLabel("Unit Price (PKR)", "fieldLabel", card));
     m_price = new NeuLineEdit(card);
     m_price->setPlaceholderText("0.00");
     colPrice->addWidget(m_price);
@@ -94,7 +121,7 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     colDiscount->addWidget(m_discount);
 
     auto* colStock = new QVBoxLayout;
-    colStock->addWidget(makeLabel("Available Stock *", "fieldLabel", card));
+    colStock->addWidget(makeLabel("Available Stock", "fieldLabel", card));
     m_stock = new NeuLineEdit(card);
     m_stock->setPlaceholderText("0");
     colStock->addWidget(m_stock);
@@ -104,18 +131,40 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     cardLayout->addLayout(row3);
 
     // Barcode + Random button
-    cardLayout->addWidget(makeLabel("Barcode (6 digits, optional)", "fieldLabel", card));
+    cardLayout->addWidget(makeLabel("Barcode", "fieldLabel", card));
     auto* barRow = new QHBoxLayout;
     barRow->setSpacing(8);
     m_barcode = new NeuLineEdit(card);
-    m_barcode->setPlaceholderText("e.g. 100004 (or click Random)");
+    if (editing)
+        m_barcode->setPlaceholderText("Not assigned (use Assign barcodes)");
     m_barcode->setMaxLength(6);
     m_barcode->setValidator(new QRegularExpressionValidator(QRegularExpression("[1-9][0-9]{0,5}"), m_barcode));
-    m_randomBtn = new NeuButton("Random", NeuButton::Variant::Normal, card);
-    m_randomBtn->setToolTip("Generate an unused random 6-digit barcode");
     barRow->addWidget(m_barcode, 1);
-    barRow->addWidget(m_randomBtn);
+    if (!editing) {                      // the barcode of an existing product is never changed
+        m_randomBtn = new NeuButton("Random", NeuButton::Variant::Normal, card);
+        m_randomBtn->setToolTip("Generate an unused random 6-digit barcode");
+        barRow->addWidget(m_randomBtn);
+    }
     cardLayout->addLayout(barRow);
+
+    // Locked fields (Edit mode): unit and barcode always, name and acronym once sold.
+    if (editing) {
+        m_name->setLockIconVisible(false);
+        m_acronym->setLockIconVisible(false);
+        m_unit->setLockIconVisible(false);
+        m_barcode->setLockIconVisible(false);
+        if (m_sold) {
+            const QString tip = "This product has been sold, so its name and acronym can't be changed.";
+            m_name->setLocked(true);
+            m_name->setToolTip(tip);
+            m_acronym->setLocked(true);
+            m_acronym->setToolTip(tip);
+        }
+        m_unit->setLocked(true);
+        m_unit->setToolTip("The measurement unit can't be changed.");
+        m_barcode->setLocked(true);
+        m_barcode->setToolTip("The barcode can't be changed.");
+    }
 
     m_banner = new Banner(card);
     cardLayout->addWidget(m_banner);
@@ -123,7 +172,7 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     // Bottom action buttons
     auto* cancelBtn = new NeuButton("Cancel", NeuButton::Variant::Normal, this);
     cancelBtn->setAutoDefault(false);
-    auto* saveBtn = new NeuButton(m_original ? "Save Changes" : "Add Product",
+    auto* saveBtn = new NeuButton(editing ? "Save Changes" : "Add Product",
                                   NeuButton::Variant::Primary, this);
     saveBtn->setDefault(true);
 
@@ -145,7 +194,8 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     connect(m_stock, &QLineEdit::textChanged, this, [this]() { m_stock->setState(""); });
     connect(m_barcode, &QLineEdit::textChanged, this, [this]() { m_barcode->setState(""); });
 
-    connect(m_randomBtn, &NeuButton::clicked, this, &ProductEditDialog::generateRandomBarcode);
+    if (m_randomBtn)
+        connect(m_randomBtn, &NeuButton::clicked, this, &ProductEditDialog::generateRandomBarcode);
     connect(cancelBtn, &NeuButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &NeuButton::clicked, this, &ProductEditDialog::onSave);
 
@@ -207,26 +257,46 @@ void ProductEditDialog::onSave()
 {
     clearErrors();
 
-    const QString name = m_name->text().trimmed();
-    if (name.isEmpty()) {
-        m_name->setState("invalid");
-        m_name->setFocus();
-        m_banner->showMessage("Enter the product name", Banner::Error);
-        return;
-    }
+    // Once sold, name and acronym are locked and keep their stored values.
+    const bool identityLocked = m_original && m_sold;
+    const std::string currentId = m_original ? m_original->id : "";
 
+    QString name = m_name->text().trimmed();
     QString acronym = m_acronym->text().trimmed().toUpper();
-    if (acronym.isEmpty()) {
-        m_acronym->setState("invalid");
-        m_acronym->setFocus();
-        m_banner->showMessage("Enter a product acronym (e.g. LAYS)", Banner::Error);
-        return;
-    }
-    if (acronym.length() > int(pos::kMaxAcronym)) {
-        m_acronym->setState("invalid");
-        m_acronym->setFocus();
-        m_banner->showMessage(QString("Acronym cannot exceed %1 characters").arg(pos::kMaxAcronym), Banner::Error);
-        return;
+    if (identityLocked) {
+        name = qs(m_original->name);
+        acronym = qs(m_original->acronym);
+    } else {
+        if (name.isEmpty()) {
+            m_name->setState("invalid");
+            m_name->setFocus();
+            m_banner->showMessage("Enter the product name", Banner::Error);
+            return;
+        }
+
+        // An unchanged acronym of an existing product is not checked again (old data may not follow the rules).
+        const bool acronymChanged = !m_original || acronym != qs(m_original->acronym).toUpper();
+        if (acronymChanged) {
+            QString problem;
+            if (acronym.isEmpty())
+                problem = "Enter a product acronym (e.g. LAYS)";
+            else if (acronym.length() < int(pos::kMinAcronym))
+                problem = QString("Acronym must be at least %1 characters").arg(pos::kMinAcronym);
+            else if (acronym.length() > int(pos::kMaxAcronym))
+                problem = QString("Acronym cannot exceed %1 characters").arg(pos::kMaxAcronym);
+            else if (!pos::isValidAcronym(ss(acronym)))
+                problem = "Acronym can only use letters and digits, with at least one letter";
+            else if (const auto owner = m_services.products().findByAcronym(ss(acronym));
+                     owner && owner->id != currentId)
+                problem = QString("Acronym '%1' is already used by '%2'").arg(acronym, qs(owner->name));
+
+            if (!problem.isEmpty()) {
+                m_acronym->setState("invalid");
+                m_acronym->setFocus();
+                m_banner->showMessage(problem, Banner::Error);
+                return;
+            }
+        }
     }
 
     bool okPrice = false;
@@ -279,56 +349,59 @@ void ProductEditDialog::onSave()
         return;
     }
 
-    const QString barcodeText = m_barcode->text().trimmed();
-    std::string barcode = ss(barcodeText);
+    std::string barcode;
     std::string barcodeFile;
 
-    if (!barcode.empty()) {
-        if (!validate6Digits(barcode)) {
-            m_barcode->setState("invalid");
-            m_barcode->setFocus();
-            m_banner->showMessage("Barcode must be 6 digits and start with 1-9", Banner::Error);
-            return;
-        }
-
-        // Duplicate check
-        const std::string currentId = m_original ? m_original->id : "";
-        for (const auto& p : m_services.products().all()) {
-            if (p.barcode == barcode && p.id != currentId) {
+    if (!m_original) {                                   // Add mode only: Edit never touches the barcode
+        barcode = ss(m_barcode->text().trimmed());
+        if (!barcode.empty()) {
+            if (!validate6Digits(barcode)) {
                 m_barcode->setState("invalid");
                 m_barcode->setFocus();
-                m_banner->showMessage(QString("Barcode already assigned to '%1'").arg(qs(p.name)), Banner::Error);
+                m_banner->showMessage("Barcode must be 6 digits and start with 1-9", Banner::Error);
                 return;
+            }
+            for (const auto& p : m_services.products().all()) {
+                if (p.barcode == barcode) {
+                    m_barcode->setState("invalid");
+                    m_barcode->setFocus();
+                    m_banner->showMessage(QString("Barcode already assigned to '%1'").arg(qs(p.name)), Banner::Error);
+                    return;
+                }
             }
         }
 
-        // Generate barcode image if needed
-        std::string path = "data/barcodes/" + barcode + ".png";
-        std::error_code ec;
-        std::filesystem::create_directories("data/barcodes", ec);
-        if (!std::filesystem::exists(path) || (m_original && m_original->barcode != barcode)) {
-            cv::Mat img = renderBarcode(encodeCode128C(barcode));
-            if (!img.empty() && saveBarcode(img, path)) {
+        if (!barcode.empty()) {
+            const std::string path = "data/barcodes/" + barcode + ".png";
+            std::error_code ec;
+            std::filesystem::create_directories("data/barcodes", ec);
+            if (!std::filesystem::exists(path)) {
+                cv::Mat img = renderBarcode(encodeCode128C(barcode));
+                if (!img.empty() && saveBarcode(img, path))
+                    barcodeFile = path;
+            } else {
                 barcodeFile = path;
             }
-        } else {
-            barcodeFile = path;
         }
     }
 
     pos::Product prod;
     if (m_original)
-        prod = *m_original;
+        prod = *m_original;                              // keeps unit, barcode and barcode image
 
-    prod.name = ss(name);
-    prod.acronym = ss(acronym);
-    prod.unit = (m_unit->currentIndex() == 0) ? pos::MeasureUnit::Count : pos::MeasureUnit::Weight;
+    if (!identityLocked) {
+        prod.name = ss(name);
+        prod.acronym = ss(acronym);
+    }
+    if (!m_original) {
+        prod.unit = (m_unit->currentIndex() == 0) ? pos::MeasureUnit::Count : pos::MeasureUnit::Weight;
+        prod.barcode = barcode;
+        prod.barcodeFile = barcodeFile;
+    }
     prod.unitPrice = price;
     prod.tax = tax;
     prod.discount = discount;
     prod.availableQty = stock;
-    prod.barcode = barcode;
-    prod.barcodeFile = barcodeFile;
 
     bool saved = false;
     if (m_original) {
@@ -346,4 +419,3 @@ void ProductEditDialog::onSave()
 
     accept();
 }
-

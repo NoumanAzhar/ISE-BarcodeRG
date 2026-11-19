@@ -11,10 +11,16 @@
 #include "Widgets.h"
 #include "order.h"
 
+#include <QAbstractButton>
+#include <QAbstractSlider>
+#include <QApplication>
+#include <QEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMouseEvent>
 #include <QMessageBox>
 #include <QPair>
 #include <QPushButton>
@@ -22,6 +28,34 @@
 #include <QRegularExpressionValidator>
 #include <QShortcut>
 #include <QVBoxLayout>
+
+namespace {
+
+// Optional field: empty is fine. Once the user has typed something it must be
+// exactly 11 digits starting with "03".
+bool isValidContact(const QString& contact)
+{
+    if (contact.size() != 11 || !contact.startsWith(QLatin1String("03")))
+        return false;
+    for (const QChar c : contact)
+        if (!c.isDigit())
+            return false;
+    return true;
+}
+
+// True if the widget (or a parent below `stop`) is a button, text input or scroll bar:
+// clicks there must not count as "empty space".
+bool isOnControl(const QWidget* widget, const QWidget* stop)
+{
+    for (const QWidget* w = widget; w && w != stop; w = w->parentWidget()) {
+        if (qobject_cast<const QAbstractButton*>(w) || qobject_cast<const QLineEdit*>(w)
+            || qobject_cast<const QAbstractSlider*>(w))
+            return true;
+    }
+    return false;
+}
+
+} // namespace
 
 namespace {
 
@@ -102,15 +136,14 @@ QWidget* OrderPage::buildOrderCard()
     m_contact = new NeuLineEdit(card);
     m_contact->setPlaceholderText("Contact (03XXXXXXXXX)");
     m_contact->setMaxLength(11);
-    m_contact->setValidator(new QRegularExpressionValidator(QRegularExpression("^(0(3[0-9]{0,9})?)?$"), m_contact));
+    m_contact->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9]*"), m_contact));
 
     connect(m_name, &QLineEdit::textChanged, this, [this]() {
         if (!m_name->text().trimmed().isEmpty())
             m_name->setState("");
     });
     connect(m_contact, &QLineEdit::textChanged, this, [this]() {
-        if (!m_contact->text().trimmed().isEmpty())
-            m_contact->setState("");
+        m_contact->setState("");
     });
 
     auto* customer = new QHBoxLayout;
@@ -185,13 +218,40 @@ QWidget* OrderPage::buildOrderCard()
 void OrderPage::onActivated()
 {
     m_active = true;
+    qApp->installEventFilter(this);      // to unselect a row when empty space is clicked
     refreshAll();
 }
 
 void OrderPage::onDeactivated()
 {
     m_active = false;
+    qApp->removeEventFilter(this);
     m_camera->setActive(false);
+}
+
+void OrderPage::resetState()
+{
+    resetFields();                       // customer, contact and typed barcode
+    m_list->clearSelection();
+    m_banner->clearMessage();
+    m_lastScan.clear();
+    refreshAll();
+}
+
+bool OrderPage::eventFilter(QObject* watched, QEvent* event)
+{
+    if (m_active && event->type() == QEvent::MouseButtonPress && watched->isWidgetType()
+        && !m_list->selectedProductId().isEmpty()) {
+        const auto* widget = static_cast<const QWidget*>(watched);
+        const auto* mouse = static_cast<const QMouseEvent*>(event);
+        if (mouse->button() == Qt::LeftButton
+            && widget->window() == window()              // not inside a dialog
+            && (widget == this || isAncestorOf(widget))
+            && !m_list->isOnRow(widget)                  // rows toggle themselves
+            && !isOnControl(widget, this))
+            m_list->clearSelection();
+    }
+    return PageBase::eventFilter(watched, event);
 }
 
 bool OrderPage::canLeave()
@@ -296,18 +356,23 @@ void OrderPage::generateBill()
     }
 
     const QString contact = m_contact->text().trimmed();
-    if (!pos::isValidPhone(contact.toStdString())) {
+    if (!contact.isEmpty() && !isValidContact(contact)) {   // contact is optional
         m_contact->setState("invalid");
         m_contact->setFocus();
-        m_banner->showMessage("Enter a valid 11-digit phone number (03XXXXXXXXX)", Banner::Error);
+        m_banner->showMessage("Enter a valid number", Banner::Error);
         return;
     }
 
-	const bool cameraWasOn = m_camera->isActive();
+    const bool cameraWasOn = m_camera->isActive();
     m_camera->setActive(false);
     const CheckoutFlow::Outcome outcome =
         CheckoutFlow(m_services).run(name, contact, this);
-    if (m_active && cameraWasOn)
+
+    // After a bill was generated the camera stays off (the cashier starts it again for the next
+    // customer). If the payment was cancelled or failed, the order goes on, so the camera comes back.
+    const bool billGenerated = outcome.result == CheckoutFlow::Result::Saved
+                            || outcome.result == CheckoutFlow::Result::SavedWithWarning;
+    if (m_active && cameraWasOn && !billGenerated)
         m_camera->setActive(true);
 
     switch (outcome.result) {

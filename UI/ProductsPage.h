@@ -26,9 +26,12 @@ public:
     ProductsPage(pos::AppServices& services, QWidget* parent = nullptr);
 
     void onActivated() override;       // reload the list (stock changes after every sale)
+    void onDeactivated() override;
+    void resetState() override;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void changeEvent(QEvent* event) override;     // theme switch: recolour the out-of-stock numbers
 
 private:
     QWidget* buildListSide();
@@ -37,6 +40,9 @@ private:
     void reload();
     void applyFilter();
     void addRow(const pos::Product& product);
+    void updateStockColors();
+    int nameIndent() const;          // pixels that put the Name values exactly under the "Name" header
+    void updateNameIndent();
     void selectById(const QString& id);
     QString selectedId() const;
     void showSelected();
@@ -61,4 +67,6 @@ private:
     NeuButton* m_editBtn = nullptr;
 
     QPixmap m_barcodePixmap;
+    bool m_active = false;
+    int m_pressedSelectedRow = -1;   // row that was already selected when the mouse went down
 };

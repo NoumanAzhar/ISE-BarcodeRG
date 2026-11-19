@@ -224,20 +224,16 @@ namespace pos {
 		return nullopt;
 	}
 
+	bool FileOrderRepository::containsProduct(const string& productId) const
+	{
+		for (const Record& row : readRecords(detailFile_)) {
+			if (row.size() > 1 && row[1] == productId) return true;
+		}
+		return false;
+	}
+
 	int FileOrderRepository::count() const
 	{
 		return static_cast<int>(readRecords(orderFile_).size());
 	}
-
-	bool isValidPhone(const string& phone)
-	{
-		if ( phone.length() != 11 || phone [0] != '0' || phone [1] != '3' )
-			return false;
-		for ( char c : phone )
-			if ( c < '0' || c > '9' )
-				return false;
-		return true;
-	}
-
 }
-

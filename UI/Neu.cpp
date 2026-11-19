@@ -189,6 +189,28 @@ void drawRing(QPainter& p, const QRect& body, int radius, const QColor& color,
     p.restore();
 }
 
+// Small padlock centred on `c`, used by locked inputs.
+void drawLock(QPainter& p, const QPointF& c, const QColor& color)
+{
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    QPen pen(color, 1.8);
+    pen.setCapStyle(Qt::RoundCap);
+    p.setPen(pen);
+    p.setBrush(Qt::NoBrush);
+
+    QPainterPath shackle;                          // the arc on top
+    shackle.moveTo(c.x() - 4, c.y() - 1);
+    shackle.lineTo(c.x() - 4, c.y() - 4);
+    shackle.arcTo(QRectF(c.x() - 4, c.y() - 8, 8, 8), 180, -180);
+    shackle.lineTo(c.x() + 4, c.y() - 1);
+    p.drawPath(shackle);
+
+    p.setBrush(color);                             // the body
+    p.drawRoundedRect(QRectF(c.x() - 6, c.y() - 1, 12, 9), 2, 2);
+    p.restore();
+}
+
 constexpr int kControlHeight = 44;
 constexpr int kButtonDepth = 4;
 constexpr int kButtonMargin = 2 * kButtonDepth;
@@ -530,6 +552,26 @@ void NeuLineEdit::setState(const QString& state)
     update();
 }
 
+void NeuLineEdit::setLocked(bool locked)
+{
+    m_locked = locked;
+    setReadOnly(locked);
+    setFocusPolicy(locked ? Qt::NoFocus : Qt::StrongFocus);
+    setCursor(locked ? Qt::ForbiddenCursor : Qt::IBeamCursor);
+    setTextMargins(14, 0, (locked && m_showLock) ? 38 : 14, 0);     // room for the padlock
+    setProperty("locked", locked);
+    style()->unpolish(this);
+    style()->polish(this);
+    update();
+}
+
+void NeuLineEdit::setLockIconVisible(bool visible)
+{
+    m_showLock = visible;
+    setTextMargins(14, 0, (m_locked && m_showLock) ? 38 : 14, 0);
+    update();
+}
+
 QSize NeuLineEdit::sizeHint() const
 {
     return QSize(200, m_large ? 64 : kControlHeight);
@@ -548,7 +590,10 @@ void NeuLineEdit::paintEvent(QPaintEvent* event)
         p.setRenderHint(QPainter::Antialiasing);
 
         const QRect body = rect().adjusted(kEditMargin, kEditMargin, -kEditMargin, -kEditMargin);
+        if (m_locked)
+            p.setOpacity(0.55);
         Neu::paint(p, body, kEditRadius, NeuStyle::Inset, 4, devicePixelRatioF());
+        p.setOpacity(1.0);
 
         const QString state = property("state").toString();
         if (state == "invalid")
@@ -557,6 +602,12 @@ void NeuLineEdit::paintEvent(QPaintEvent* event)
             drawRing(p, body, kEditRadius, c.success);
         else if (hasFocus())
             drawRing(p, body, kEditRadius, c.accent);
+
+        if (m_locked) {
+            drawRing(p, body, kEditRadius, Theme::withAlpha(c.muted, 150), 1.5, Qt::DashLine);
+            if (m_showLock)
+                drawLock(p, QPointF(body.right() - 20, body.center().y()), c.muted);
+        }
     }
     QLineEdit::paintEvent(event);     // text, cursor (the style sheet paints no box)
 }
@@ -610,11 +661,28 @@ void NeuSegmented::setCurrentIndex(int index)
     emit currentChanged(index);
 }
 
+void NeuSegmented::setLocked(bool locked)
+{
+    m_locked = locked;
+    m_keyboardFocus = false;
+    setFocusPolicy(locked ? Qt::NoFocus : Qt::TabFocus);
+    setCursor(locked ? Qt::ForbiddenCursor : Qt::PointingHandCursor);
+    update();
+}
+
+void NeuSegmented::setLockIconVisible(bool visible)
+{
+    m_showLock = visible;
+    update();
+}
+
 void NeuSegmented::paintEvent(QPaintEvent*)
 {
     const Theme::Colors& c = Theme::colors();
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
+    if (m_locked)
+        p.setOpacity(0.55);
 
     const QRect track = rect().adjusted(kTrackMargin, kTrackMargin, -kTrackMargin, -kTrackMargin);
     Neu::paint(p, track, 16, NeuStyle::Inset, 4, devicePixelRatioF());
@@ -639,10 +707,21 @@ void NeuSegmented::paintEvent(QPaintEvent*)
         p.setPen(i == m_current ? c.accent : c.text);
         p.drawText(segmentRect(i), Qt::AlignCenter, m_labels[i]);
     }
+
+    if (m_locked) {
+        p.setOpacity(1.0);
+        drawRing(p, track, 16, Theme::withAlpha(c.muted, 150), 1.5, Qt::DashLine);
+        if (m_showLock)
+            drawLock(p, QPointF(track.right() - 18, track.center().y()), c.muted);
+    }
 }
 
 void NeuSegmented::mousePressEvent(QMouseEvent* event)
 {
+    if (m_locked) {
+        event->accept();
+        return;
+    }
     for (int i = 0; i < m_labels.size(); ++i) {
         if (segmentRect(i).contains(event->position().toPoint())) {
             setCurrentIndex(i);
@@ -654,6 +733,10 @@ void NeuSegmented::mousePressEvent(QMouseEvent* event)
 
 void NeuSegmented::keyPressEvent(QKeyEvent* event)
 {
+    if (m_locked) {
+        QWidget::keyPressEvent(event);
+        return;
+    }
     if (event->key() == Qt::Key_Left)
         setCurrentIndex(m_current - 1);
     else if (event->key() == Qt::Key_Right)

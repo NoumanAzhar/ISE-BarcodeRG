@@ -9,15 +9,23 @@
 #include "Widgets.h"
 #include "barcode_assign.h"
 
+#include <QAbstractButton>
+#include <QAbstractSlider>
+#include <QApplication>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QIcon>
+#include <QPixmap>
 #include <QItemSelectionModel>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMouseEvent>
 #include <QStackedWidget>
 #include <QTableWidget>
 #include <QTableWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -27,6 +35,23 @@ namespace {
 enum Column { ColAcronym, ColName, ColPrice, ColStock, ColBarcode, ColCount };
 
 constexpr int kWarningMs = 5000;
+constexpr int kAcronymIndent = 10;  // pixels the Acronym values are moved to the right
+constexpr int kIconSpacing = 4;     // gap Qt leaves between a cell icon and its text
+constexpr int kIconMax = 400;       // widest indent the table icon size allows
+
+// Transparent icon: used as an invisible spacer in front of a cell's text.
+// Dark red on the light theme, light red on the dark theme.
+QColor stockWarningColor()
+{
+    return Theme::isDark() ? QColor("#ff7b72") : QColor("#b00000");
+}
+
+QIcon spacerIcon(int width)
+{
+    QPixmap blank(width, 1);
+    blank.fill(Qt::transparent);
+    return QIcon(blank);
+}
 
 QTableWidgetItem* makeItem(const QString& text, Qt::Alignment align = Qt::AlignLeft | Qt::AlignVCenter)
 {
@@ -41,6 +66,18 @@ bool matches(const pos::Product& p, const QString& needle)
     return qs(p.acronym).toLower().contains(needle)
         || qs(p.name).toLower().contains(needle)
         || qs(p.barcode).contains(needle);
+}
+
+// True if the widget (or a parent below `stop`) is a button, text input, scroll bar or
+// table header: clicks there must not count as "empty space".
+bool isOnControl(const QWidget* widget, const QWidget* stop)
+{
+    for (const QWidget* w = widget; w && w != stop; w = w->parentWidget()) {
+        if (qobject_cast<const QAbstractButton*>(w) || qobject_cast<const QLineEdit*>(w)
+            || qobject_cast<const QAbstractSlider*>(w) || qobject_cast<const QHeaderView*>(w))
+            return true;
+    }
+    return false;
 }
 
 } // namespace
@@ -68,7 +105,7 @@ QWidget* ProductsPage::buildListSide()
     topLayout->setSpacing(8);
 
     m_search = new NeuLineEdit(side);
-    m_search->setPlaceholderText("Search name, acronym or barcode");
+    m_search->setPlaceholderText("Search");
     topLayout->addWidget(m_search, 1);
 
     m_addBtn = new NeuButton("Add Product", NeuButton::Variant::Primary, side);
@@ -88,6 +125,9 @@ QWidget* ProductsPage::buildListSide()
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(ColName, QHeaderView::Stretch);
     m_table->horizontalHeader()->setHighlightSections(false);
+    m_table->setIconSize(QSize(kIconMax, 1));      // the invisible icon in the Name cells is the indent
+    connect(m_table->horizontalHeader(), &QHeaderView::sectionResized, this,
+            [this](int column, int, int) { if (column == ColName) updateNameIndent(); });
 
     m_emptyLabel = makeLabel(QString(), "muted", well);
     m_emptyLabel->setAlignment(Qt::AlignCenter);
@@ -102,7 +142,10 @@ QWidget* ProductsPage::buildListSide()
 
     connect(m_search, &NeuLineEdit::textChanged, this, &ProductsPage::applyFilter);
     connect(m_table, &QTableWidget::itemSelectionChanged, this, &ProductsPage::showSelected);
-    connect(m_table, &QTableWidget::cellDoubleClicked, this, [this](int, int) { editSelected(); });
+    connect(m_table, &QTableWidget::cellDoubleClicked, this, [this](int row, int) {
+        m_table->selectRow(row);         // the first click of a double click may have unselected it
+        editSelected();
+    });
     connect(m_addBtn, &NeuButton::clicked, this, &ProductsPage::addProduct);
     return side;
 }
@@ -164,6 +207,8 @@ QWidget* ProductsPage::buildDetailsCard()
 
 void ProductsPage::onActivated()
 {
+    m_active = true;
+    qApp->installEventFilter(this);      // to unselect when empty space is clicked
     reload();
 
     const size_t bad = m_services.products().warnings().size();
@@ -174,10 +219,51 @@ void ProductsPage::onActivated()
         m_banner->clearMessage();
 }
 
+void ProductsPage::onDeactivated()
+{
+    m_active = false;
+    qApp->removeEventFilter(this);
+}
+
+void ProductsPage::resetState()
+{
+    m_search->clear();
+    selectById(QString());
+    m_banner->clearMessage();
+}
+
 bool ProductsPage::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_image && event->type() == QEvent::Resize)
         showBarcodeImage();
+
+    const QEvent::Type type = event->type();
+    if (m_active && (type == QEvent::MouseButtonPress || type == QEvent::MouseButtonRelease)
+        && watched->isWidgetType()) {
+        const auto* widget = static_cast<const QWidget*>(watched);
+        const auto* mouse = static_cast<const QMouseEvent*>(event);
+
+        if (mouse->button() == Qt::LeftButton && widget->window() == window()) {
+            if (widget == m_table->viewport()) {
+                // Click on the selected row again = unselect; click below the rows = unselect.
+                const QModelIndex index = m_table->indexAt(mouse->position().toPoint());
+                if (type == QEvent::MouseButtonPress) {
+                    const QModelIndexList rows = m_table->selectionModel()->selectedRows();
+                    const int selectedRow = rows.isEmpty() ? -1 : rows.first().row();
+                    m_pressedSelectedRow = (index.isValid() && index.row() == selectedRow) ? selectedRow : -1;
+                    if (!index.isValid())
+                        m_table->clearSelection();
+                } else {
+                    if (index.isValid() && index.row() == m_pressedSelectedRow)
+                        QTimer::singleShot(0, this, [this]() { m_table->clearSelection(); });
+                    m_pressedSelectedRow = -1;
+                }
+            } else if (type == QEvent::MouseButtonPress && (widget == this || isAncestorOf(widget))
+                       && !isOnControl(widget, this)) {
+                m_table->clearSelection();               // empty space anywhere else on the page
+            }
+        }
+    }
     return PageBase::eventFilter(watched, event);
 }
 
@@ -201,6 +287,7 @@ void ProductsPage::applyFilter()
             addRow(p);
     }
     m_table->blockSignals(false);
+    updateNameIndent();
 
     if (m_table->rowCount() == 0) {
         m_emptyLabel->setText(m_products.empty() ? "No products in Product.txt"
@@ -213,6 +300,42 @@ void ProductsPage::applyFilter()
     selectById(keep);
 }
 
+void ProductsPage::changeEvent(QEvent* event)
+{
+    PageBase::changeEvent(event);
+    if (event->type() == QEvent::StyleChange)
+        updateStockColors();
+}
+
+int ProductsPage::nameIndent() const
+{
+    // The header centres "Name" in its (stretching) column; the cell text starts after the cell
+    // padding (10), the icon and the icon gap. Solve for the icon width that makes both start together.
+    const QHeaderView* header = m_table->horizontalHeader();
+    const int textWidth = header->fontMetrics().horizontalAdvance(QStringLiteral("Name"));
+    const int icon = (header->sectionSize(ColName) - textWidth) / 2 - 10 - kIconSpacing;
+    return std::clamp(icon, 1, kIconMax);
+}
+
+void ProductsPage::updateNameIndent()
+{
+    const QIcon icon = spacerIcon(nameIndent());
+    for (int row = 0; row < m_table->rowCount(); ++row) {
+        if (auto* item = m_table->item(row, ColName))
+            item->setIcon(icon);
+    }
+}
+
+void ProductsPage::updateStockColors()
+{
+    if (!m_table)
+        return;
+    for (int row = 0; row < m_table->rowCount(); ++row) {
+        if (auto* item = m_table->item(row, ColStock); item && item->data(Qt::UserRole).toBool())
+            item->setForeground(stockWarningColor());
+    }
+}
+
 void ProductsPage::addRow(const pos::Product& p)
 {
     const int row = m_table->rowCount();
@@ -220,12 +343,20 @@ void ProductsPage::addRow(const pos::Product& p)
 
     auto* acronym = makeItem(qs(p.acronym));
     acronym->setData(Qt::UserRole, qs(p.id));
+    acronym->setIcon(spacerIcon(kAcronymIndent));
     auto* stock = makeItem(formatQty(p.availableQty, p.unit), Qt::AlignRight | Qt::AlignVCenter);
-    if (p.availableQty <= 0)
-        stock->setForeground(Theme::colors().danger);
+    if (p.availableQty <= 0) {
+        stock->setData(Qt::UserRole, true);           // out of stock: coloured by updateStockColors()
+        QFont f = stock->font();
+        f.setBold(true);
+        stock->setFont(f);
+        stock->setForeground(stockWarningColor());
+    }
 
     m_table->setItem(row, ColAcronym, acronym);
-    m_table->setItem(row, ColName, makeItem(qs(p.name)));
+    auto* name = makeItem(qs(p.name));
+    name->setIcon(spacerIcon(nameIndent()));
+    m_table->setItem(row, ColName, name);
     m_table->setItem(row, ColPrice, makeItem(formatPkr(p.unitPrice), Qt::AlignRight | Qt::AlignVCenter));
     m_table->setItem(row, ColStock, stock);
     m_table->setItem(row, ColBarcode, makeItem(qs(p.barcode)));
