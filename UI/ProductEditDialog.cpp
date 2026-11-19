@@ -20,6 +20,22 @@
 #include <random>
 #include <set>
 
+namespace {
+// Heavy, slightly rounded text for the "Product Name" and "Barcode" captions (Add mode).
+// Tries the heavy rounded fonts first, then Segoe UI Black, then plain bold.
+const char* const kStrongLabelStyle =
+    "font-family: 'Arial Rounded MT Bold', 'Nunito Black', 'Nunito', 'Varela Round', "
+    "'Segoe UI Black', 'Segoe UI'; font-weight: 900; font-size: 16px;";
+
+QLabel* makeCaption(const QString& text, bool strong, QWidget* parent)
+{
+    QLabel* label = makeLabel(text, "fieldLabel", parent);
+    if (strong)
+        label->setStyleSheet(kStrongLabelStyle);
+    return label;
+}
+}
+
 ProductEditDialog::ProductEditDialog(pos::AppServices& services,
                                      std::optional<pos::Product> product,
                                      QWidget* parent)
@@ -45,11 +61,8 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
         cardLayout->addWidget(makeLabel("Add New Product", "sectionTitle", card));
 
     // Name
-    auto* nameLabel = makeLabel("Product Name", "fieldLabel", card);
-    nameLabel->setStyleSheet("font-weight: 800;");
-    cardLayout->addWidget(nameLabel);
+    cardLayout->addWidget(makeCaption("Product Name", !editing, card));
     m_name = new NeuLineEdit(card);
-    m_name->setPlaceholderText("e.g. Lays Masala");
     cardLayout->addWidget(m_name);
 
     // Acronym & Unit in a horizontal row
@@ -59,7 +72,6 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     auto* colAcronym = new QVBoxLayout;
     colAcronym->addWidget(makeLabel("Acronym", "fieldLabel", card));
     m_acronym = new NeuLineEdit(card);
-    m_acronym->setPlaceholderText("e.g. LAYS");
     m_acronym->setMaxLength(int(pos::kMaxAcronym));
     m_acronym->setValidator(new QRegularExpressionValidator(QRegularExpression("[A-Za-z0-9]*"), m_acronym));
     connect(m_acronym, &QLineEdit::textEdited, this, [this](const QString& text) {
@@ -119,15 +131,12 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     cardLayout->addLayout(row3);
 
     // Barcode + Random button
-    auto* barcodeLabel = makeLabel("Barcode", "fieldLabel", card);
-    barcodeLabel->setStyleSheet("font-weight: 800;");
-    barcodeLabel->setAlignment(Qt::AlignHCenter);
-    cardLayout->addWidget(barcodeLabel);
+    cardLayout->addWidget(makeLabel("Barcode", "fieldLabel", card));
     auto* barRow = new QHBoxLayout;
     barRow->setSpacing(8);
     m_barcode = new NeuLineEdit(card);
-    m_barcode->setPlaceholderText(editing ? "Not assigned (use Assign barcodes)"
-                                          : "e.g. 100004 (or click Random)");
+    if (editing)
+        m_barcode->setPlaceholderText("Not assigned (use Assign barcodes)");
     m_barcode->setMaxLength(6);
     m_barcode->setValidator(new QRegularExpressionValidator(QRegularExpression("[1-9][0-9]{0,5}"), m_barcode));
     barRow->addWidget(m_barcode, 1);

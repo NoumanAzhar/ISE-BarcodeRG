@@ -31,6 +31,7 @@ public:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void changeEvent(QEvent* event) override;     // theme switch: recolour the out-of-stock numbers
 
 private:
     QWidget* buildListSide();
@@ -39,6 +40,9 @@ private:
     void reload();
     void applyFilter();
     void addRow(const pos::Product& product);
+    void updateStockColors();
+    int nameIndent() const;          // pixels that put the Name values exactly under the "Name" header
+    void updateNameIndent();
     void selectById(const QString& id);
     QString selectedId() const;
     void showSelected();
