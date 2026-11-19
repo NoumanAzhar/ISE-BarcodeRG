@@ -22,23 +22,19 @@ public:
                                QWidget* parent = nullptr);
 
     std::string savedProductId() const { return m_savedId; }
-    bool wasDeleted() const { return m_deleted; }     // Edit mode: the product was deleted
 
 private slots:
     void onSave();
-    void onDelete();
     void generateRandomBarcode();
 
 private:
     void populateFields();
     void clearErrors();
-    bool confirmNewProduct(const QString& name, const QString& acronym, bool counted);
 
     pos::AppServices& m_services;
     std::optional<pos::Product> m_original;
     std::string m_savedId;
     bool m_sold = false;       // Edit mode: the product appears in a saved order
-    bool m_deleted = false;
 
     NeuLineEdit* m_name = nullptr;
     NeuLineEdit* m_acronym = nullptr;
@@ -49,7 +45,6 @@ private:
     NeuLineEdit* m_stock = nullptr;
     NeuLineEdit* m_barcode = nullptr;
     NeuButton* m_randomBtn = nullptr;       // Add mode only
-    NeuButton* m_deleteBtn = nullptr;       // Edit mode only
     Banner* m_banner = nullptr;
 };
 

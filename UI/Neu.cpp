@@ -558,10 +558,17 @@ void NeuLineEdit::setLocked(bool locked)
     setReadOnly(locked);
     setFocusPolicy(locked ? Qt::NoFocus : Qt::StrongFocus);
     setCursor(locked ? Qt::ForbiddenCursor : Qt::IBeamCursor);
-    setTextMargins(14, 0, locked ? 38 : 14, 0);     // room for the padlock
+    setTextMargins(14, 0, (locked && m_showLock) ? 38 : 14, 0);     // room for the padlock
     setProperty("locked", locked);
     style()->unpolish(this);
     style()->polish(this);
+    update();
+}
+
+void NeuLineEdit::setLockIconVisible(bool visible)
+{
+    m_showLock = visible;
+    setTextMargins(14, 0, (m_locked && m_showLock) ? 38 : 14, 0);
     update();
 }
 
@@ -598,7 +605,8 @@ void NeuLineEdit::paintEvent(QPaintEvent* event)
 
         if (m_locked) {
             drawRing(p, body, kEditRadius, Theme::withAlpha(c.muted, 150), 1.5, Qt::DashLine);
-            drawLock(p, QPointF(body.right() - 20, body.center().y()), c.muted);
+            if (m_showLock)
+                drawLock(p, QPointF(body.right() - 20, body.center().y()), c.muted);
         }
     }
     QLineEdit::paintEvent(event);     // text, cursor (the style sheet paints no box)
@@ -662,6 +670,12 @@ void NeuSegmented::setLocked(bool locked)
     update();
 }
 
+void NeuSegmented::setLockIconVisible(bool visible)
+{
+    m_showLock = visible;
+    update();
+}
+
 void NeuSegmented::paintEvent(QPaintEvent*)
 {
     const Theme::Colors& c = Theme::colors();
@@ -697,7 +711,8 @@ void NeuSegmented::paintEvent(QPaintEvent*)
     if (m_locked) {
         p.setOpacity(1.0);
         drawRing(p, track, 16, Theme::withAlpha(c.muted, 150), 1.5, Qt::DashLine);
-        drawLock(p, QPointF(track.right() - 18, track.center().y()), c.muted);
+        if (m_showLock)
+            drawLock(p, QPointF(track.right() - 18, track.center().y()), c.muted);
     }
 }
 

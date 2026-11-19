@@ -10,7 +10,6 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
@@ -42,22 +41,13 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     cardLayout->setContentsMargins(20, 18, 20, 18);
     cardLayout->setSpacing(10);
 
-    cardLayout->addWidget(makeLabel(editing ? "Edit Product Details" : "Add New Product",
-                                    "sectionTitle", card));
-
-    if (editing) {
-        auto* note = makeLabel(
-            m_sold ? "Name and acronym are locked because this product has been sold. "
-                     "Measurement unit and barcode can never be changed."
-                   : "Name and acronym can be corrected until the first sale. "
-                     "Measurement unit and barcode can't be changed.",
-            "hint", card);
-        note->setWordWrap(true);
-        cardLayout->addWidget(note);
-    }
+    if (!editing)
+        cardLayout->addWidget(makeLabel("Add New Product", "sectionTitle", card));
 
     // Name
-    cardLayout->addWidget(makeLabel("Product Name *", "fieldLabel", card));
+    auto* nameLabel = makeLabel("Product Name", "fieldLabel", card);
+    nameLabel->setStyleSheet("font-weight: 800;");
+    cardLayout->addWidget(nameLabel);
     m_name = new NeuLineEdit(card);
     m_name->setPlaceholderText("e.g. Lays Masala");
     cardLayout->addWidget(m_name);
@@ -67,7 +57,7 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     row1->setSpacing(12);
 
     auto* colAcronym = new QVBoxLayout;
-    colAcronym->addWidget(makeLabel("Acronym (2-8 letters/digits) *", "fieldLabel", card));
+    colAcronym->addWidget(makeLabel("Acronym", "fieldLabel", card));
     m_acronym = new NeuLineEdit(card);
     m_acronym->setPlaceholderText("e.g. LAYS");
     m_acronym->setMaxLength(int(pos::kMaxAcronym));
@@ -93,7 +83,7 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     row2->setSpacing(12);
 
     auto* colPrice = new QVBoxLayout;
-    colPrice->addWidget(makeLabel("Unit Price (PKR) *", "fieldLabel", card));
+    colPrice->addWidget(makeLabel("Unit Price (PKR)", "fieldLabel", card));
     m_price = new NeuLineEdit(card);
     m_price->setPlaceholderText("0.00");
     colPrice->addWidget(m_price);
@@ -119,7 +109,7 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     colDiscount->addWidget(m_discount);
 
     auto* colStock = new QVBoxLayout;
-    colStock->addWidget(makeLabel("Available Stock *", "fieldLabel", card));
+    colStock->addWidget(makeLabel("Available Stock", "fieldLabel", card));
     m_stock = new NeuLineEdit(card);
     m_stock->setPlaceholderText("0");
     colStock->addWidget(m_stock);
@@ -129,8 +119,10 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     cardLayout->addLayout(row3);
 
     // Barcode + Random button
-    cardLayout->addWidget(makeLabel(editing ? "Barcode (locked)" : "Barcode (6 digits, optional)",
-                                    "fieldLabel", card));
+    auto* barcodeLabel = makeLabel("Barcode", "fieldLabel", card);
+    barcodeLabel->setStyleSheet("font-weight: 800;");
+    barcodeLabel->setAlignment(Qt::AlignHCenter);
+    cardLayout->addWidget(barcodeLabel);
     auto* barRow = new QHBoxLayout;
     barRow->setSpacing(8);
     m_barcode = new NeuLineEdit(card);
@@ -148,6 +140,10 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
 
     // Locked fields (Edit mode): unit and barcode always, name and acronym once sold.
     if (editing) {
+        m_name->setLockIconVisible(false);
+        m_acronym->setLockIconVisible(false);
+        m_unit->setLockIconVisible(false);
+        m_barcode->setLockIconVisible(false);
         if (m_sold) {
             const QString tip = "This product has been sold, so its name and acronym can't be changed.";
             m_name->setLocked(true);
@@ -173,15 +169,6 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
 
     auto* buttons = new QHBoxLayout;
     buttons->setSpacing(8);
-    if (editing) {
-        m_deleteBtn = new NeuButton("Delete Product", NeuButton::Variant::Danger, this);
-        m_deleteBtn->setAutoDefault(false);
-        if (m_sold) {
-            m_deleteBtn->setEnabled(false);
-            m_deleteBtn->setToolTip("Products that have been sold can't be deleted.");
-        }
-        buttons->addWidget(m_deleteBtn);
-    }
     buttons->addStretch(1);
     buttons->addWidget(cancelBtn);
     buttons->addWidget(saveBtn);
@@ -200,8 +187,6 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
 
     if (m_randomBtn)
         connect(m_randomBtn, &NeuButton::clicked, this, &ProductEditDialog::generateRandomBarcode);
-    if (m_deleteBtn)
-        connect(m_deleteBtn, &NeuButton::clicked, this, &ProductEditDialog::onDelete);
     connect(cancelBtn, &NeuButton::clicked, this, &QDialog::reject);
     connect(saveBtn, &NeuButton::clicked, this, &ProductEditDialog::onSave);
 
@@ -377,10 +362,6 @@ void ProductEditDialog::onSave()
             }
         }
 
-        // Last look before the name, acronym and unit are saved.
-        if (!confirmNewProduct(name, acronym, m_unit->currentIndex() == 0))
-            return;
-
         if (!barcode.empty()) {
             const std::string path = "data/barcodes/" + barcode + ".png";
             std::error_code ec;
@@ -429,59 +410,3 @@ void ProductEditDialog::onSave()
 
     accept();
 }
-
-bool ProductEditDialog::confirmNewProduct(const QString& name, const QString& acronym, bool counted)
-{
-    QMessageBox box(this);
-    box.setIcon(QMessageBox::Question);
-    box.setWindowTitle("Check the details");
-    box.setText(QString("Name: %1\nAcronym: %2\nUnit: %3")
-                    .arg(name, acronym, counted ? "count" : "weight"));
-    box.setInformativeText("The measurement unit can never be changed. The name and acronym "
-                           "can only be corrected until the product's first sale.");
-    QPushButton* back = box.addButton("Go back", QMessageBox::RejectRole);
-    QPushButton* add = box.addButton("Add Product", QMessageBox::AcceptRole);
-    box.setDefaultButton(back);
-    box.exec();
-    return box.clickedButton() == add;
-}
-
-void ProductEditDialog::onDelete()
-{
-    if (!m_original || m_sold)
-        return;
-
-    QMessageBox box(this);
-    box.setIcon(QMessageBox::Warning);
-    box.setWindowTitle("Delete product");
-    box.setText(QString("Delete '%1'?").arg(qs(m_original->name)));
-    box.setInformativeText("This product has never been sold. Deleting it can't be undone.");
-    QPushButton* keep = box.addButton("Cancel", QMessageBox::RejectRole);
-    QPushButton* del = box.addButton("Delete", QMessageBox::DestructiveRole);
-    box.setDefaultButton(keep);
-    box.exec();
-    if (box.clickedButton() != del)
-        return;
-
-    if (!m_services.products().remove(m_original->id)) {
-        m_banner->showMessage("Failed to delete the product from Product.txt", Banner::Error);
-        return;
-    }
-
-    // Remove its barcode picture too, unless another product still uses the same file.
-    const std::string file = m_original->barcodeFile;
-    if (!file.empty()) {
-        bool shared = false;
-        for (const auto& p : m_services.products().all())
-            shared = shared || p.barcodeFile == file;
-        if (!shared) {
-            std::error_code ec;
-            std::filesystem::remove(file, ec);
-        }
-    }
-
-    m_deleted = true;
-    m_savedId.clear();
-    accept();
-}
-

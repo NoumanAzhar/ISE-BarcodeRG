@@ -120,6 +120,7 @@ public:
     // Read-only look: faded, dashed ring and a padlock. Cannot be focused or edited.
     void setLocked(bool locked);
     bool isLocked() const { return m_locked; }
+    void setLockIconVisible(bool visible);     // hide the padlock; the locked behaviour stays
 
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
@@ -130,6 +131,7 @@ protected:
 private:
     bool m_large = false;
     bool m_locked = false;
+    bool m_showLock = true;
 };
 
 // ---------------------------------------------------------------------------
@@ -147,6 +149,7 @@ public:
     // Same locked look as NeuLineEdit; the selection can then only be set from code.
     void setLocked(bool locked);
     bool isLocked() const { return m_locked; }
+    void setLockIconVisible(bool visible);     // hide the padlock; the locked behaviour stays
 
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
@@ -168,4 +171,5 @@ private:
     int m_current = 0;
     bool m_keyboardFocus = false;
     bool m_locked = false;
+    bool m_showLock = true;
 };
