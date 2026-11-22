@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "data_files.h"
+#include "Category.h"
 
 using namespace std;
 
@@ -29,6 +30,7 @@ namespace pos {
             tax = 0.0;
             discount = 0.0;
             availableQty = 0.0;
+            string categoryId;
         }
         Product(string id, string barcode, string acronym, string name, string unit, double unitPrice, double tax,
             double discount, double availableQty, string barcodeFile)
@@ -78,6 +80,7 @@ namespace pos {
         virtual std::optional<Product> findByAcronym(const std::string& acronym) const = 0;
         // deletes the product with this id; false if not found or the write fails
         virtual bool remove(const std::string& id) = 0;
+        virtual std::string nextId() const = 0;
     };
 
     // 2 to 8 characters, letters and digits only, at least one letter.
