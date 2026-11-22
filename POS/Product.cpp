@@ -1,5 +1,6 @@
 #include "Product.h"
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <iomanip>
@@ -375,126 +376,125 @@ namespace pos {
         text += "Available: " + formatQuantity(p.availableQty);
         return text;
     }
-}
 
-// ---- ProductService ----
+    // ---- ProductService ----
 
-namespace {
+    namespace {
 
-    ProductResult validateProduct(const Product& p, const ICategoryRepository& categories)
+        ProductResult validateProduct(const Product& p, const ICategoryRepository& categories)
+        {
+            ProductResult res;
+            res.product = p;
+            if (p.name.find_first_not_of(' ') == string::npos)
+            {
+                res.error = ProductError::EmptyName;
+                res.message = "product name is empty";
+            }
+            else if (!isValidAcronym(p.acronym))
+            {
+                res.error = ProductError::BadAcronym;
+                res.message = "acronym must be up to 8 letters or digits and contain a letter";
+            }
+            else if (p.unitPrice <= 0 || p.tax < 0)
+            {
+                res.error = ProductError::BadPrice;
+                res.message = "price must be above 0 and tax cannot be negative";
+            }
+            else if (p.discount < 0 || p.discount > p.unitPrice)
+            {
+                res.error = ProductError::BadDiscount;
+                res.message = "discount must be between 0 and the unit price";
+            }
+            else if (p.availableQty < 0 || (p.unit == MeasureUnit::Count && p.availableQty != floor(p.availableQty)))
+            {
+                res.error = ProductError::BadStock;
+                res.message = "stock cannot be negative, and a count product needs a whole number";
+            }
+            else if (!categories.findById(p.categoryId))
+            {
+                res.error = ProductError::UnknownCategory;
+                res.message = "category does not exist";
+            }
+            return res;
+        }
+
+    } // anonymous namespace
+
+    ProductService::ProductService(IProductRepository& products, const ICategoryRepository& categories)
+        : products_(products), categories_(categories)
+    {
+    }
+
+    ProductResult ProductService::add(Product p)
+    {
+        ProductResult res = validateProduct(p, categories_);
+        if (!res.ok())
+            return res;
+        vector<Product> existing = products_.all();
+        for (size_t i = 0; i < existing.size(); i++)
+        {
+            if (upper(existing[i].acronym) == upper(p.acronym))
+            {
+                res.error = ProductError::BadAcronym;
+                res.message = "acronym already used";
+                return res;
+            }
+        }
+        p.acronym = upper(p.acronym);
+        p.id = products_.nextId();
+        p.barcode = "";
+        p.barcodeFile = "";
+        if (!products_.add(p))
+        {
+            res.error = ProductError::SaveFailed;
+            res.message = "could not save the product";
+            return res;
+        }
+        res.product = p;
+        return res;
+    }
+
+    ProductResult ProductService::edit(const Product& p)
     {
         ProductResult res;
         res.product = p;
-        if (p.name.find_first_not_of(' ') == string::npos)
+        optional<Product> stored = products_.findById(p.id);
+        if (!stored)
         {
-            res.error = ProductError::EmptyName;
-            res.message = "product name is empty";
-        }
-        else if (!isValidAcronym(p.acronym))
-        {
-            res.error = ProductError::BadAcronym;
-            res.message = "acronym must be up to 8 letters or digits and contain a letter";
-        }
-        else if (p.unitPrice <= 0 || p.tax < 0)
-        {
-            res.error = ProductError::BadPrice;
-            res.message = "price must be above 0 and tax cannot be negative";
-        }
-        else if (p.discount < 0 || p.discount > p.unitPrice)
-        {
-            res.error = ProductError::BadDiscount;
-            res.message = "discount must be between 0 and the unit price";
-        }
-        else if (p.availableQty < 0 || (p.unit == MeasureUnit::Count && p.availableQty != floor(p.availableQty)))
-        {
-            res.error = ProductError::BadStock;
-            res.message = "stock cannot be negative, and a count product needs a whole number";
-        }
-        else if (!categories.findById(p.categoryId))
-        {
-            res.error = ProductError::UnknownCategory;
-            res.message = "category does not exist";
-        }
-        return res;
-    }
-
-} // anonymous namespace
-
-ProductService::ProductService(IProductRepository& products, const ICategoryRepository& categories)
-    : products_(products), categories_(categories)
-{
-}
-
-ProductResult ProductService::add(Product p)
-{
-    ProductResult res = validateProduct(p, categories_);
-    if (!res.ok())
-        return res;
-    vector<Product> existing = products_.all();
-    for (size_t i = 0; i < existing.size(); i++)
-    {
-        if (upper(existing[i].acronym) == upper(p.acronym))
-        {
-            res.error = ProductError::BadAcronym;
-            res.message = "acronym already used";
+            res.error = ProductError::NotFound;
+            res.message = "product not found";
             return res;
         }
-    }
-    p.acronym = upper(p.acronym);
-    p.id = products_.nextId();
-    p.barcode = "";
-    p.barcodeFile = "";
-    if (!products_.add(p))
-    {
-        res.error = ProductError::SaveFailed;
-        res.message = "could not save the product";
-        return res;
-    }
-    res.product = p;
-    return res;
-}
-
-ProductResult ProductService::edit(const Product& p)
-{
-    ProductResult res;
-    res.product = p;
-    optional<Product> stored = products_.findById(p.id);
-    if (!stored)
-    {
-        res.error = ProductError::NotFound;
-        res.message = "product not found";
-        return res;
-    }
-    res = validateProduct(p, categories_);
-    if (!res.ok())
-        return res;
-    if (stored->unit != p.unit)
-    {
-        res.error = ProductError::SaveFailed;
-        res.message = "the measurement unit cannot be changed";
-        return res;
-    }
-    vector<Product> existing = products_.all();
-    for (size_t i = 0; i < existing.size(); i++)
-    {
-        if (existing[i].id != p.id && upper(existing[i].acronym) == upper(p.acronym))
+        res = validateProduct(p, categories_);
+        if (!res.ok())
+            return res;
+        if (stored->unit != p.unit)
         {
-            res.error = ProductError::BadAcronym;
-            res.message = "acronym already used";
+            res.error = ProductError::SaveFailed;
+            res.message = "the measurement unit cannot be changed";
             return res;
         }
-    }
-    Product updated = p;
-    updated.acronym = upper(p.acronym);
-    updated.barcode = stored->barcode;
-    updated.barcodeFile = stored->barcodeFile;
-    if (!products_.update(updated))
-    {
-        res.error = ProductError::SaveFailed;
-        res.message = "could not save the product";
+        vector<Product> existing = products_.all();
+        for (size_t i = 0; i < existing.size(); i++)
+        {
+            if (existing[i].id != p.id && upper(existing[i].acronym) == upper(p.acronym))
+            {
+                res.error = ProductError::BadAcronym;
+                res.message = "acronym already used";
+                return res;
+            }
+        }
+        Product updated = p;
+        updated.acronym = upper(p.acronym);
+        updated.barcode = stored->barcode;
+        updated.barcodeFile = stored->barcodeFile;
+        if (!products_.update(updated))
+        {
+            res.error = ProductError::SaveFailed;
+            res.message = "could not save the product";
+            return res;
+        }
+        res.product = updated;
         return res;
     }
-    res.product = updated;
-    return res;
-}
 }

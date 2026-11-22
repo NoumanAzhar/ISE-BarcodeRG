@@ -3,10 +3,9 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include "data_files.h"
+#include "Data_Files.h"
 #include "Category.h"
 
-using namespace std;
 
 namespace pos {
 
@@ -18,6 +17,7 @@ namespace pos {
         MeasureUnit unit;
         double unitPrice, tax, discount, availableQty;
         std::string barcodeFile;
+        std::string categoryId;
         Product()
         {
             id = "";
@@ -30,16 +30,16 @@ namespace pos {
             tax = 0.0;
             discount = 0.0;
             availableQty = 0.0;
-            string categoryId;
+            categoryId = "";
         }
-        Product(string id, string barcode, string acronym, string name, string unit, double unitPrice, double tax,
-            double discount, double availableQty, string barcodeFile)
+        Product(std::string id, std::string barcode, std::string acronym, std::string name, std::string unit, double unitPrice, double tax,
+            double discount, double availableQty, std::string barcodeFile)
         {
             this->id = id; this->barcode = barcode; this->acronym = acronym; this->name = name; this->barcodeFile = barcodeFile;
             this->unitPrice = unitPrice; this->tax = tax; this->discount = discount; this->availableQty = availableQty;
 
             // lower-case copy of the unit text (the old code appended to an undeclared variable 'type')
-            string lowered;
+            std::string lowered;
             for (size_t i = 0; i < unit.length(); i++)
             {
                 lowered += static_cast<char>(tolower(static_cast<unsigned char>(unit[i])));
@@ -51,8 +51,8 @@ namespace pos {
                 this->unit = MeasureUnit::Weight;
 
         }
-        Product(string id, string barcode, string acronym, string name, MeasureUnit unit, double unitPrice, double tax,
-            double discount, double availableQty, string barcodeFile)
+        Product(std::string id, std::string barcode, std::string acronym, std::string name, MeasureUnit unit, double unitPrice, double tax,
+            double discount, double availableQty, std::string barcodeFile)
         {
             this->id = id; this->barcode = barcode; this->acronym = acronym; this->name = name; this->barcodeFile = barcodeFile;
             this->unitPrice = unitPrice; this->tax = tax; this->discount = discount; this->availableQty = availableQty;
@@ -75,7 +75,7 @@ namespace pos {
         virtual bool update(const Product& product) = 0;
         // appends a new product; if id is empty, assigns next 4-digit sequence id;
         // returns false if id already exists or write fails
-        virtual bool add(Product& product) = 0;
+        virtual bool add(const Product& product) = 0;
         // nullopt if no product has this acronym (case-insensitive)
         virtual std::optional<Product> findByAcronym(const std::string& acronym) const = 0;
         // deletes the product with this id; false if not found or the write fails
@@ -95,7 +95,8 @@ namespace pos {
         std::optional<Product> findById(const std::string& id) const override;
         std::vector<Product> all() const override;
         bool update(const Product& product) override;
-        bool add(Product& product) override;
+        bool add(const Product& product) override;
+        std::string nextId() const override;
         std::optional<Product> findByAcronym(const std::string& acronym) const override;
         bool remove(const std::string& id) override;
         bool assignIDs();
@@ -122,5 +123,31 @@ namespace pos {
 
     // Multi-line, human-readable text for the Description button and scan screen.
     std::string describeProduct(const Product& p);
+
+    // ---- Layer 3: rules ----
+    enum class ProductError {
+        None, EmptyName, BadAcronym, BadPrice, BadDiscount, BadStock, UnknownCategory, NotFound, SaveFailed
+    };
+
+    struct ProductResult {
+        ProductError error = ProductError::None;
+        std::string message;
+        Product product;
+        bool ok() const { return error == ProductError::None; }
+    };
+
+    class ProductService {
+    public:
+        ProductService(IProductRepository& products, const ICategoryRepository& categories);
+
+        // validates, assigns the id (barcode stays empty until BarcodeAssigner runs)
+        ProductResult add(Product p);
+        // by id; barcode and image path are kept
+        ProductResult edit(const Product& p);
+
+    private:
+        IProductRepository& products_;
+        const ICategoryRepository& categories_;
+    };
 
 } // namespace pos
