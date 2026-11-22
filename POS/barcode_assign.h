@@ -17,7 +17,7 @@ namespace pos {
 
 	class BarcodeAssigner {
 	public:
-		BarcodeAssigner(IProductRepository& products, const IcategoryRepository& categories, stdstring imageDir = kBarcodeDir);
+		BarcodeAssigner(IProductRepository& products, const IcategoryRepository& categories, std::string imageDir = kBarcodeDir);
 		// A barcode is kept if it is valid, unique and starts with the product's
 		// category id. Others get categoryId + 4 random digits, unique.
 		// Draws <imageDir>/<barcode>.png
