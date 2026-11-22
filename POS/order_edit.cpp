@@ -1,11 +1,11 @@
 #include "order_edit.h"
+#include "Data_Files.h"
 
 #include <string>
 using namespace std;
 
 namespace pos {
 	namespace {
-		constexpr int KEditWindowDays = 7;
 
 		bool isLeap(int y)
 		{
@@ -24,12 +24,13 @@ namespace pos {
 			const long long era = (y >= 0 ? y : y - 399) / 400;
 			const long long yoe = y - era * 400;
 			const long long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+			const long long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
 			return era * 146097 + doe - 719468;
 		}
 
 		bool parseDate(const string& text, int& y, int& m, int& d)
 		{
-			if (text.size() != 10 || text[4] != '-' || text[7] != '-') return;
+			if (text.size() != 10 || text[4] != '-' || text[7] != '-') return false;
 			for (size_t i = 0; i < text.size(); i++)
 			{
 				if (i == 4 || i == 7) continue;
@@ -71,7 +72,7 @@ namespace pos {
 		const int days = daysBetween(since, clock_.date());
 		if (days == kInvalidDays || days < 0)
 			return { false, false, "The payment date is not valid." };
-		if (days > kEditWindowDays)
+		if (days > kPaidEditWindowDays)
 			return { false, false, "The edit window for a paid order is over." };
 		return { true, true, "" };
 	}
