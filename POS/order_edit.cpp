@@ -76,4 +76,40 @@ namespace pos {
 			return { false, false, "The edit window for a paid order is over." };
 		return { true, true, "" };
 	}
+
+	OrderEditService::OrderEditService(const IOrderRepository& orders,
+		const IBillRepository& bills, const OrderEditPolicy& policy)
+		: orders_(orders), bills_(bills), policy_(policy)
+	{
+	}
+
+	OpenResult OrderEditService::open(const string& orderId, bool managerApproved) const
+	{
+		OpenResult result{ false, false, Order{}, "" };
+
+		auto order = orders_.findById(orderId);
+		if (!order) {
+			result.error = "Order not found.";
+			return result;
+		}
+
+		string paidDate;
+		if (auto bill = bills_.findByOrderId(orderId)) paidDate = bill->date;
+
+		const EditDecision decision = policy_.check(*order, paidDate);
+		if (!decision.allowed) {
+			result.error = decision.reason;
+			return result;
+		}
+		if (decision.needsApproval && !managerApproved) {
+			result.needsApproval = true;
+			result.error = "Manager approval is required.";
+			return result;
+		}
+
+		result.ok = true;
+		result.needsApproval = decision.needsApproval;
+		result.order = *order;
+		return result;
+	}
 }
