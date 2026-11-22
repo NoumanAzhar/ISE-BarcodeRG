@@ -3,29 +3,28 @@
 #include <string>
 #include <vector>
 
+#include "Data_Files.h"
 #include "Product.h"
+#include "category.h"
 
 namespace pos {
+	struct AssignReport {
+		int assigned = 0;
+		int kept = 0;
+		int failed = 0;
+		std::vector<std::string> messages;
+	};
 
-    struct AssignReport {
-        int assigned = 0;
-        int kept = 0;
-        int failed = 0;
-        std::vector<std::string> messages;
-    };
-
-    class BarcodeAssigner {
-    public:
-        explicit BarcodeAssigner(IProductRepository& products,
-            std::string imageDir = "data/barcodes");
-
-        // empty, "-", not 6 digits, leading 0 or duplicate barcode = unassigned;
-        // draws <imageDir>/<barcode>.png
-        AssignReport assignAll();
-
-    private:
-        IProductRepository& products_;
-        std::string imageDir_;
-    };
-
-} 
+	class BarcodeAssigner {
+	public:
+		BarcodeAssigner(IProductRepository& products, const IcategoryRepository& categories, stdstring imageDir = kBarcodeDir);
+		// A barcode is kept if it is valid, unique and starts with the product's
+		// category id. Others get categoryId + 4 random digits, unique.
+		// Draws <imageDir>/<barcode>.png
+		AssignReport assignAll();
+	private:
+		IProductRepository& products_;
+		const ICategoryRepository& categories_;
+		std::string imageDir_;
+	};
+}
