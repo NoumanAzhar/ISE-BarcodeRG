@@ -1,6 +1,14 @@
-0001|100001|LAYS|Lays|count|50.00|5.00|0.00|23|data/barcodes/100001.png|#
-0002|100002|COCOMO|Cocomo|count|10.00|1.00|0.00|132|data/barcodes/100002.png|#
-0003|100003|7UPDIET|Diet 7up|count|150.00|15.00|5.00|52|data/barcodes/100003.png|#
-0004|100004|7UP|7up|count|150.00|15.00|5.00|54|data/barcodes/100004.png|#
-0005|554518|LA|layssss|count|50.00|0.00|0.00|5|data/barcodes/554518.png|#
-0006|200548|CK|coke|count|10.00|0.00|0.00|0|data/barcodes/200548.png|#
+0001|141234|LAYS|Lays Classic|count|50.00|10.00|0.00|97|data/barcodes/141234.png|#
+0002|433966|COCOMO|Cocomo|count|10.00|1.00|0.00|146|data/barcodes/433966.png|#
+0003|371759|7UPDIET|Diet 7up 1.5L|count|150.00|15.00|5.00|57|data/barcodes/371759.png|#
+0004|404907|KITKAT|KitKat 2 Finger|count|70.00|7.00|0.00|78|data/barcodes/404907.png|#
+0005|694833|SUGAR|Sugar (per kg)|weight|180.00|18.00|0.00|79.5|data/barcodes/694833.png|#
+0006|489681|SALT|Iodized Salt 800g|count|60.00|3.00|0.00|88|data/barcodes/489681.png|#
+0007|321267|WATER500|Nestle Water 500ml|count|70.00|7.00|0.00|116|data/barcodes/321267.png|#
+0008|602067|OLPERS|Olpers Milk 1L|count|340.00|34.00|10.00|50|data/barcodes/602067.png|#
+0009|385827|TAPAL|Tapal Danedar 190g|count|380.00|38.00|0.00|38|data/barcodes/385827.png|#
+0010|585226|SOOPER|Peek Freans Sooper|count|40.00|4.00|2.00|100|data/barcodes/585226.png|#
+0011|624197|DALDA|Dalda Cooking Oil 1L|count|560.00|56.00|0.00|35|data/barcodes/624197.png|#
+0012|372752|KNORR|Knorr Noodles|count|60.00|6.00|0.00|107|data/barcodes/372752.png|#
+0013|180447|PEPSI|Pepsi 345ml|count|80.00|8.00|5.00|86|data/barcodes/180447.png|#
+0014|659372|KR|kurkure|count|20.00|0.00|0.00|10|data/barcodes/659372.png|#
