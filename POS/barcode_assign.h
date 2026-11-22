@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-#include "product.h"
+#include "Product.h"
 
 namespace pos {
 
