@@ -23,6 +23,11 @@ namespace pos {
 	std::string encodeField(const std::string& value)
 	{
 		string final = trimSpaces(value);
+		for (int i = 0; i < final.length(); i++)
+		{
+			if (final[i] == ' ')
+				final[i] = '_';
+		}
 		if (final == "")
 			return "-";
 		return final;
@@ -30,6 +35,11 @@ namespace pos {
 	std::string decodeField(const std::string& token)
 	{
 		string final = trimSpaces(token);
+		for (int i = 0; i < final.length(); i++)
+		{
+			if (final[i] == '_')
+				final[i] = ' ';
+		}
 		if (final == "-")
 			return "";
 		return final;
@@ -38,8 +48,8 @@ namespace pos {
 	{
 		Record rec;
 		string text = trimSpaces(line);
-		size_t at;
-		while ((at = text.find('|')) != std::string::npos)
+		int at;
+		while ((at = text.find(' ')) != std::string::npos)
 		{
 			string part = text.substr(0, at);
 			rec.push_back(decodeField(part));
@@ -52,10 +62,10 @@ namespace pos {
 	std::string joinRecord(const Record& fields)
 	{
 		string final;
-		for (size_t i = 0; i < fields.size(); i++)
+		for (int i = 0; i < fields.size(); i++)
 		{
 			final += encodeField(fields[i]);
-			final += "|";
+			final += " ";
 		}
 		final += "#";
 		return final;
