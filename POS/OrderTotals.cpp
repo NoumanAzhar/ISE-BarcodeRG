@@ -1,4 +1,7 @@
 #include "OrderTotals.h"
+#include "Bill.h"
+#include <utility>
+#include <vector>
 
 namespace pos {
 
@@ -7,21 +10,27 @@ namespace pos {
         return (product.unitPrice + product.tax - product.discount) * qty;
     }
 
-    OrderTotals computeTotals(const Order& order, const IProductRepository& products)
+    OrderTotals computeTotals(const Order& order, const IProductRepository& products,
+        double seasonalPercent, double specialPercent)
     {
-        OrderTotals totals;
+        std::vector<std::pair<Product, double>> lines;
         for (const OrderItem& item : order.items) {
             const std::optional<Product> product = products.findById(item.productId);
             if (!product)
                 continue;
-            totals.withoutTax += product->unitPrice * item.quantity;
-            totals.tax += product->tax * item.quantity;
-            totals.discount += product->discount * item.quantity;
+            lines.push_back({ *product, item.quantity });
         }
 
-        totals.payable = totals.withoutTax + totals.tax - totals.discount;
-        if (totals.payable < 0)
-            totals.payable = 0;
+        BillCalculator calculator;   // the same class the saved bill uses
+        const BillTotals t = calculator.compute(lines, seasonalPercent, specialPercent);
+
+        OrderTotals totals;
+        totals.withoutTax = t.withoutTax;
+        totals.tax = t.tax;
+        totals.discount = t.productDiscount;
+        totals.seasonalDiscount = t.seasonalDiscount;
+        totals.specialDiscount = t.specialDiscount;
+        totals.payable = t.payable;
         return totals;
     }
 

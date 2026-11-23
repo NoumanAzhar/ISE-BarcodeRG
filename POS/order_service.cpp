@@ -7,6 +7,8 @@ namespace pos {
     namespace {
 
         constexpr double kEpsilon = 1e-9;
+        constexpr int kMaxSequence = 999999;               // order id = 6-digit sequence + 2-digit day
+        constexpr const char* kWalkInName = "Walk-in";
 
         bool fitsStock(double wanted, double available) { return wanted <= available + kEpsilon; }
 
@@ -18,7 +20,16 @@ namespace pos {
             return p.unit == MeasureUnit::Weight || isWhole(q);
         }
 
+        // "00012314" -> 123 ; -1 if the id is not numeric
+        int sequenceOf(const string& orderId) {
+            if (orderId.size() < 3) return -1;
+            try { return stoi(orderId.substr(0, orderId.size() - 2)); }
+            catch (...) { return -1; }
+        }
+
     } // namespace
+
+    // ---------------- OrderService ----------------
 
     OrderService::OrderService(const IProductRepository& products) : products_(products) {
         start("");
@@ -31,7 +42,7 @@ namespace pos {
         order_.status = OrderStatus::InProgress;
         order_.paymentAmount = 0;
         order_.paymentMode = PaymentMode::None;
-        // id, date and time stay empty: BillService::checkout assigns them
+        // id, date and time stay empty: CheckoutService (or hold) assigns them
     }
 
     vector<OrderItem>::iterator OrderService::findItem(const string& productId) {
@@ -85,5 +96,54 @@ namespace pos {
     void OrderService::clear() { order_.items.clear(); }
 
     const Order& OrderService::current() const { return order_; }
+
+    bool OrderService::load(const Order& order) {
+        if (order.status == OrderStatus::Archived) return false;
+        order_ = order;
+        return true;
+    }
+
+    // ---------------- OrderHoldService ----------------
+
+    OrderHoldService::OrderHoldService(OrderService& draft, IOrderRepository& orders, const IClock& clock)
+        : draft_(draft), orders_(orders), clock_(clock) {
+    }
+
+    optional<string> OrderHoldService::hold() {
+        Order order = draft_.current();
+        if (order.items.empty()) return nullopt;
+        if (order.status == OrderStatus::Paid || order.status == OrderStatus::Archived) return nullopt;
+
+        if (order.id.empty()) {
+            int highest = 0;
+            for (const Order& o : orders_.all())
+                highest = max(highest, sequenceOf(o.id));
+            if (highest >= kMaxSequence) return nullopt;
+            order.id = makeOrderId(highest + 1, clock_.dayOfMonth());
+        }
+        if (order.customerName.empty()) order.customerName = kWalkInName;
+        order.status = OrderStatus::OnHold;
+        // date and time stay as they are (empty): they are set when the order is paid
+
+        if (!orders_.save(order)) return nullopt;
+        draft_.start("");
+        return order.id;
+    }
+
+    bool OrderHoldService::resume(const string& orderId) {
+        auto order = orders_.findById(orderId);
+        if (!order || order->status != OrderStatus::OnHold) return false;
+        return draft_.load(*order);
+    }
+
+    vector<Order> OrderHoldService::list() const {
+        vector<Order> held;
+        for (const Order& o : orders_.all())
+            if (o.status == OrderStatus::OnHold) held.push_back(o);
+        sort(held.begin(), held.end(), [](const Order& a, const Order& b) {
+            return sequenceOf(a.id) > sequenceOf(b.id);
+            });
+        return held;
+    }
 
 } // namespace pos
