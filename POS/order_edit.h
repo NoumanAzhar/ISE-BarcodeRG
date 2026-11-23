@@ -24,6 +24,20 @@ namespace pos {
         const IClock& clock_;
     };
 
+    // What CheckoutService asks before it saves an order that already exists.
+    struct EditCheck {
+        bool permitted = false;
+        bool needsApproval = false;
+        std::string message;
+        bool allowed() const { return permitted; }
+    };
+
+    class IEditPolicy {
+    public:
+        virtual ~IEditPolicy() = default;
+        virtual EditCheck check(const std::string& orderId) const = 0;
+    };
+
     struct OpenResult {
         bool ok;
         bool needsApproval;
@@ -31,10 +45,13 @@ namespace pos {
         std::string error;
     };
 
-    class OrderEditService {
+    class OrderEditService : public IEditPolicy {
     public:
         OrderEditService(const IOrderRepository& orders, const IBillRepository& bills,
             const OrderEditPolicy& policy);
+
+        // Looks the order and its bill up and applies OrderEditPolicy.
+        EditCheck check(const std::string& orderId) const override;
 
         // Returns the order to edit, or the reason it was refused.
         OpenResult open(const std::string& orderId, bool managerApproved) const;
@@ -45,4 +62,4 @@ namespace pos {
         const OrderEditPolicy& policy_;
     };
 
-}
+} // namespace pos

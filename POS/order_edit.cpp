@@ -41,34 +41,42 @@ namespace pos {
 	{
 	}
 
+	EditCheck OrderEditService::check(const string& orderId) const
+	{
+		auto order = orders_.findById(orderId);
+		if (!order) return { false, false, "Order not found." };
+
+		string paidDate;
+		if (auto bill = bills_.findByOrderId(orderId)) paidDate = bill->getDate();
+
+		const EditDecision decision = policy_.check(*order, paidDate);
+		return { decision.allowed, decision.needsApproval, decision.reason };
+	}
+
 	OpenResult OrderEditService::open(const string& orderId, bool managerApproved) const
 	{
 		OpenResult result{ false, false, Order{}, "" };
+
+		const EditCheck verdict = check(orderId);
+		if (!verdict.allowed()) {
+			result.error = verdict.message;
+			return result;
+		}
+		if (verdict.needsApproval && !managerApproved) {
+			result.needsApproval = true;
+			result.error = "Manager approval is required.";
+			return result;
+		}
 
 		auto order = orders_.findById(orderId);
 		if (!order) {
 			result.error = "Order not found.";
 			return result;
 		}
-
-		string paidDate;
-		if (auto bill = bills_.findByOrderId(orderId)) paidDate = bill->getDate();
-
-		const EditDecision decision = policy_.check(*order, paidDate);
-		if (!decision.allowed) {
-			result.error = decision.reason;
-			return result;
-		}
-		if (decision.needsApproval && !managerApproved) {
-			result.needsApproval = true;
-			result.error = "Manager approval is required.";
-			return result;
-		}
-
 		result.ok = true;
-		result.needsApproval = decision.needsApproval;
+		result.needsApproval = verdict.needsApproval;
 		result.order = *order;
 		return result;
 	}
 
-}
+} // namespace pos
