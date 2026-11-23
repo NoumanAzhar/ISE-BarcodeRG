@@ -17,7 +17,7 @@ namespace pos {
 
 		bool categoryExists(const ICategoryRepository& categories, const string& id)
 		{
-			return id.size() == static_cast<size_t>(kCategoryDigits) && categories.findById(id).has_value();
+			return id.size() == static_cast<size_t>(kCategoryIdDigits) && categories.findById(id).has_value();
 		}
 	}
 	BarcodeAssigner::BarcodeAssigner(IProductRepository& products, const ICategoryRepository& categories, string imageDir) : products_(products), categories_(categories), imageDir_(move(imageDir))
@@ -37,7 +37,7 @@ namespace pos {
 		{
 			const Product& p = products[i];
 			if (!categoryExists(categories_, p.categoryId)) continue;
-			const bool prefixOK = p.barcode.compare(0, kCategoryDigits, p.categoryId) == 0;
+			const bool prefixOK = p.barcode.compare(0, kCategoryIdDigits, p.categoryId) == 0;
 			if (prefixOK && validate6Digits(p.barcode) && used.insert(p.barcode).second) {
 				usable[i] = true;
 				++report.kept;
@@ -60,7 +60,7 @@ namespace pos {
 
             int inCategory = 0;
             for (const string& code : used) {
-                if (code.compare(0, kCategoryDigits, p.categoryId) == 0) ++inCategory;
+                if (code.compare(0, kCategoryIdDigits, p.categoryId) == 0) ++inCategory;
             }
             if (inCategory >= kPerCategory) {
                 ++report.failed;

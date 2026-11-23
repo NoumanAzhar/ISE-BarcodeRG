@@ -5,9 +5,10 @@
 
 #include "Data_Files.h"
 #include "Product.h"
-#include "category.h"
+#include "Category.h"
 
 namespace pos {
+	inline constexpr const char* kBarcodeImageDir = "data/barcodes";
 	struct AssignReport {
 		int assigned = 0;
 		int kept = 0;
@@ -17,7 +18,7 @@ namespace pos {
 
 	class BarcodeAssigner {
 	public:
-		BarcodeAssigner(IProductRepository& products, const ICategoryRepository& categories, std::string imageDir = kBarcodeDir);
+		BarcodeAssigner(IProductRepository& products, const ICategoryRepository& categories, std::string imageDir = kBarcodeImageDir);
 		// A barcode is kept if it is valid, unique and starts with the product's
 		// category id. Others get categoryId + 4 random digits, unique.
 		// Draws <imageDir>/<barcode>.png
