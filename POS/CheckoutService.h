@@ -1,25 +1,36 @@
 #pragma once
 #include <optional>
 #include <string>
-
 #include "Bill.h"
 #include "BillGenerator.h"
-#include "Product.h"
+#include "inventory.h"
 #include "order.h"
+#include "order_edit.h"
+#include "season.h"
 
 namespace pos {
 
     enum class CheckoutStatus {
         Success,
         EmptyOrder,
-        InvalidQuantity,
         InvalidPayment,
+        InvalidQuantity,
         ProductNotFound,
         InsufficientStock,
         InvalidTotal,        // discount larger than price + tax
         OrderSaveFailed,
         BillFailed,          // order IS saved (paid), bill could not be written
-        StockUpdateFailed    // order and bill are saved, some stock was not reduced
+        StockUpdateFailed,    // order and bill are saved, some stock was not reduced
+        AmountTooLow,
+        InvalidSpecialDiscount,
+        EditNotAllowed
+    };
+
+    struct Payment {
+        PaymentMode mode = PaymentMode::None;
+        std::string merchant;
+        double amountReceived = 0;
+        double specialPercent = 0;
     };
 
     struct CheckoutResult {
@@ -28,28 +39,35 @@ namespace pos {
         std::string orderId;               // set once the order has an id
         std::optional<Bill> bill;          // set when the bill was generated
 
-        bool ok() const { return status == CheckoutStatus::Success; }
+        bool ok() const { 
+            return status == CheckoutStatus::Success; 
+        }
     };
 
     // Runs "Generate Bill" as one operation so the GUI only makes one call:
-    //   validate -> assign id/date/time -> mark paid -> save order -> bill -> reduce stock.
-    // Reads the draft from OrderService::current(); it does not edit products
-    // or bills itself, it only coordinates the repositories and BillGenerator.
+    // No ID                ---> New Order
+    // Id, Stored Not Paid  ---> Resumed on-hold order 
+    // ID, Stored Paid      ---> Edited paid order 
     class CheckoutService {
-    public:
-        CheckoutService(IOrderRepository& orders,
-            IProductRepository& products,
-            const IClock& clock,
-            BillGenerator& billGenerator);
-
-        // merchant is required for Card and Wallet, ignored for Cash.
-        CheckoutResult checkout(Order order, PaymentMode mode, const std::string& merchant);
-
     private:
         IOrderRepository& orders_;
         IProductRepository& products_;
+        InventoryService& inventory_;
+        const SeasonService& seasons_;
+        const IEditPolicy& editPolicy_;
         const IClock& clock_;
         BillGenerator& bills_;
+
+    public:
+        CheckoutService(IOrderRepository& orders,
+            IProductRepository& products,
+            InventoryService& inventory,
+            const SeasonService& seasons,
+            const IEditPolicy& editPolicy,
+            const IClock& clock,
+            BillGenerator& billGenerator);
+
+        CheckoutResult checkout(Order order,const Payment& payment);
     };
 
 } // namespace pos

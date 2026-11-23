@@ -1,9 +1,12 @@
 #include "CheckoutService.h"
-
 #include <algorithm>
+#include <cmath>
 #include <exception>
+#include <map>
+#include <set>
 #include <utility>
 #include <vector>
+#include "Data_Files.h"
 using namespace std;
 
 namespace pos {
@@ -28,7 +31,8 @@ namespace pos {
         bool nextSequence(const IOrderRepository& orders, int& out) {
             int highest = 0;
             for (const Order& o : orders.all()) {
-                if (o.id.size() < 3) continue;
+                if (o.id.size() < 3) 
+                    continue;
                 try {
                     highest = max(highest, stoi(o.id.substr(0, o.id.size() - 2)));
                 }
@@ -36,80 +40,125 @@ namespace pos {
                     // ignore ids that are not numeric
                 }
             }
-            if (highest >= kMaxSequence) return false;
+            if (highest >= kMaxSequence) 
+                return false;
             out = highest + 1;
             return true;
         }
 
-        // Returns the names of products whose stock could not be updated.
-        vector<string> reduceStock(IProductRepository& products, const vector<OrderItem>& items) {
-            vector<string> failed;
-            for (const OrderItem& item : items) {
-                auto product = products.findById(item.productId);
-                if (!product) {
-                    failed.push_back(item.productId);
-                    continue;
-                }
-                product->availableQty = max(0.0, product->availableQty - item.quantity);
-                if (!products.update(*product)) failed.push_back(product->name);
-            }
-            return failed;
+        //product id->total quantity
+        map<string, double> quantitiesOf(const vector<OrderItem>& items) {
+            map<string, double> result;
+            for (const OrderItem& item : items)
+                result[item.productId] += item.quantity;
+            return result;
         }
 
     } // namespace
 
     CheckoutService::CheckoutService(IOrderRepository& orders, IProductRepository& products,
-        const IClock& clock, BillGenerator& billGenerator)
-        : orders_(orders), products_(products), clock_(clock), bills_(billGenerator) {
-    }
+        InventoryService& inventory, const SeasonService& seasons,
+        const IEditPolicy& editPolicy, const IClock& clock,
+        BillGenerator& billGenerator)
+        : orders_(orders), products_(products), inventory_(inventory), seasons_(seasons), editPolicy_(editPolicy), clock_(clock), bills_(billGenerator) {}
 
-    CheckoutResult CheckoutService::checkout(Order order, PaymentMode mode, const string& merchant) {
+    CheckoutResult CheckoutService::checkout(Order order, const Payment& payment) {
+
         // 1. validate everything before anything is written
         if (order.items.empty())
             return fail(CheckoutStatus::EmptyOrder, "The order has no items.");
-        if (mode == PaymentMode::None)
+        if (payment.mode == PaymentMode::None)
             return fail(CheckoutStatus::InvalidPayment, "Choose a payment mode.");
-        if (needsMerchant(mode) && merchant.empty())
+        if (needsMerchant(payment.mode) && payment.merchant.empty())
             return fail(CheckoutStatus::InvalidPayment, "Enter the merchant name for card or wallet payments.");
+        if (!(payment.specialPercent >= 0) || payment.specialPercent > kMaxSpecialPercent + kEpsilon)
+            return fail(CheckoutStatus::InvalidSpecialDiscount, "The special discount must be between 0 and 8 percent.");
+        if (!isfinite(payment.amountReceived) || payment.amountReceived < 0)
+            return fail(CheckoutStatus::AmountTooLow, "Invalid amount received.");
 
-        double total = 0;
+        //2. Path: new/resumed on-hold/edited paid order
+        optional<Order> stored;
+        bool isEdit = false;
+        if (!order.id.empty()) {
+            stored = orders_.findById(order.id);
+            if (!stored)
+                return fail(CheckoutStatus::EditNotAllowed, "Order " + order.id + " was not found.");
+            EditCheck check = editPolicy_.check(order.id);
+            if (!check.allowed())
+                return fail(CheckoutStatus::EditNotAllowed, check.message);
+            isEdit = (stored->status == OrderStatus::Paid);
+        }
+        
+        //Stock already taken by the old paid order(only edit has any)
+        map<string, double>oldQty;
+        if (isEdit)
+            oldQty = quantitiesOf(stored->items);
+        const map<string, double>newQty = quantitiesOf(order.items);
+
+        //3. check every line against fresh product data
+        vector<pair<Product, double>> lines;
         for (const OrderItem& item : order.items) {
             if (!(item.quantity > kEpsilon))
                 return fail(CheckoutStatus::InvalidQuantity, "Invalid quantity for product " + item.productId + ".");
-
-            auto product = products_.findById(item.productId);   // fresh read: stock may have changed since the scan
-            if (!product)
-                return fail(CheckoutStatus::ProductNotFound, "Product not found: " + item.productId);
-            if (item.quantity > product->availableQty + kEpsilon)
-                return fail(CheckoutStatus::InsufficientStock, "Not enough stock for " + product->name + ".");
-
-            total += (product->unitPrice + product->tax - product->discount) * item.quantity;
         }
-        if (total < -kEpsilon)
+        for (const auto& entry : newQty) {
+            auto product = products_.findById(entry.first);   // fresh read: stock may have changed since the scan
+            if (!product)
+                return fail(CheckoutStatus::ProductNotFound, "Product not found: " + entry.first);
+            auto old = oldQty.find(entry.first);
+            const double available = product->availableQty + (old == oldQty.end() ? 0.0 : old->second);
+            if (entry.second > available + kEpsilon)
+                return fail(CheckoutStatus::InsufficientStock, "Not enough stock for " + product->name + ".");
+            lines.push_back({ *product, entry.second });
+        }
+
+        //4. id, date and time
+        if (isEdit) {
+            order.id = stored->id;
+            order.date = stored->date;
+            order.time = stored->time;
+        }
+        else {
+            if (order.id.empty()) {
+                int sequence = 0;
+                if (!nextSequence(orders_, sequence))
+                    return fail(CheckoutStatus::OrderSaveFailed, "No order ids are left.");
+                order.id = makeOrderId(sequence, clock_.dayOfMonth());
+            }
+            order.date = clock_.date();     // date and time are set when the order is paid
+            order.time = clock_.time();
+        }
+
+        //5. totals 
+        const double seasonalPercent = seasons_.percentOn(order.date);
+        BillCalculator calculator;
+        const BillTotals totals = calculator.compute(lines, seasonalPercent, payment.specialPercent);
+        if(totals.withoutTax+totals.tax-totals.productDiscount< -kEpsilon)
             return fail(CheckoutStatus::InvalidTotal, "The discount is larger than the amount payable.");
+        if (payment.amountReceived > 0 && payment.amountReceived < totals.payable - kEpsilon)
+            return fail(CheckoutStatus::AmountTooLow, "The amount received is less than the amount payable.");
 
-        // 2. id, date and time
-        int sequence = 0;
-        if (!nextSequence(orders_, sequence))
-            return fail(CheckoutStatus::OrderSaveFailed, "No order ids are left.");
-        order.id = makeOrderId(sequence, clock_.dayOfMonth());
-        order.date = clock_.date();
-        order.time = clock_.time();
-
-        // 3. mark paid (BillGenerator reads the status from the saved order)
+        // 6. mark paid
         order.status = OrderStatus::Paid;
-        order.paymentAmount = max(total, 0.0);
-        order.paymentMode = mode;
-        order.paymentMerchant = needsMerchant(mode) ? merchant : "";
+        order.paymentAmount = totals.payable;
+        order.paymentMode = payment.mode;
+        order.paymentMerchant = needsMerchant(payment.mode) ? payment.merchant : "";
 
-        // 4. save order, then bill
+        // 7. save order, then bill (new, or replaced under the same id)
         if (!orders_.save(order))
             return fail(CheckoutStatus::OrderSaveFailed, "Could not save the order.");
 
         CheckoutResult result;
         result.orderId = order.id;
+
+        BillAdjustments adj;
+        adj.seasonalPercent = seasonalPercent;
+        adj.specialPercent = payment.specialPercent;
+        adj.amountReceived = payment.amountReceived;
+        adj.date = order.date;
+        adj.time = order.time;
         try {
-            result.bill = bills_.generateBill(order.id);
+            result.bill = bills_.generateBill(order.id, adj);
         }
         catch (const exception& e) {
             result.status = CheckoutStatus::BillFailed;
@@ -117,17 +166,32 @@ namespace pos {
             return result;
         }
 
-        // 5. reduce stock
-        vector<string> failed = reduceStock(products_, order.items);
+        // 8. stock changes by the difference: old - new (a new order has old = 0)
+        set<string> ids;
+        for (const auto& e : oldQty) 
+            ids.insert(e.first);
+        for (const auto& e : newQty) 
+            ids.insert(e.first);
+
+        vector<string> failed;
+        for (const string& id : ids) {
+            auto o = oldQty.find(id);
+            auto n = newQty.find(id);
+            const double delta = (o == oldQty.end() ? 0.0 : o->second) - (n == newQty.end() ? 0.0 : n->second);
+            if (fabs(delta) < kEpsilon) 
+                continue;
+            if (!inventory_.adjust(id, delta)) 
+                failed.push_back(id);
+        }
         if (!failed.empty()) {
             string names;
-            for (const string& name : failed) names += (names.empty() ? "" : ", ") + name;
+            for (const string& id : failed) names += (names.empty() ? "" : ", ") + id;
             result.status = CheckoutStatus::StockUpdateFailed;
-            result.message = "Bill generated, but stock was not updated for: " + names;
+            result.message = "Bill generated, but stock was not updated for product(s): " + names;
             return result;
         }
-
-        result.message = "Order " + order.id + " paid. Bill " + result.bill->getBillId() + " generated.";
+        result.message = string("Order ") + order.id + (isEdit ? " updated. Bill " : " paid. Bill ")
+            + result.bill->getBillId() + (isEdit ? " replaced." : " generated.");
         return result;
     }
 
