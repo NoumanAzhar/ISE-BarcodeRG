@@ -61,9 +61,12 @@ namespace pos {
             return l + std::string(kLineWidth - l.size() - value.size(), ' ') + value;
         }
 
+        constexpr size_t kLabelWidth = 12;   // "Payment Mode" is the longest label
+
         std::string field(const std::string& label, const std::string& value)
         {
-            return padRight(label, 10) + ": " + cut(value.empty() ? "-" : value, kLineWidth - 12);
+            return padRight(label, kLabelWidth) + ": " +
+                cut(value.empty() ? "-" : value, kLineWidth - kLabelWidth - 2);
         }
 
         std::string upper(std::string text)
@@ -81,7 +84,7 @@ namespace pos {
         }
 
         // Every line of the bill; formatBill and the PDF both use this.
-        std::vector<Line> billLines(const Bill& bill, const std::string& contact)
+        std::vector<Line> billLines(const Bill& bill, const BillOrderInfo& info)
         {
             std::vector<Line> lines;
             auto add = [&lines](const std::string& text, bool bold = false) {
@@ -94,8 +97,10 @@ namespace pos {
             add(field("Bill id", bill.getBillId()));
             add(field("Order id", bill.getOrderId()));
             add(field("Customer", bill.getCustomerName()));
-            if (!contact.empty())
-                add(field("Phone", contact));
+            if (!info.customerContact.empty())
+                add(field("Phone", info.customerContact));
+            if (!info.paymentMode.empty())
+                add(field("Payment Mode", info.paymentMode));
             add(field("Date", bill.getDate().empty() ? "" : bill.getDate() + "  " + bill.getTime()));
             add(field("Status", upper(bill.getOrderStatus())));
             add(rule());
@@ -162,10 +167,27 @@ namespace pos {
         return buffer;
     }
 
-    std::string formatBill(const Bill& bill, const std::string& customerContact)
+    std::string paymentModeText(PaymentMode mode, const std::string& merchant)
+    {
+        const std::string suffix = merchant.empty() ? "" : "-" + merchant;
+        switch (mode) {
+        case PaymentMode::Cash:   return "Cash";
+        case PaymentMode::Card:   return "Bank" + suffix;
+        case PaymentMode::Wallet: return "Wallet" + suffix;
+        case PaymentMode::None:   break;
+        }
+        return "";
+    }
+
+    BillOrderInfo billOrderInfo(const Order& order)
+    {
+        return { order.customerContact, paymentModeText(order.paymentMode, order.paymentMerchant) };
+    }
+
+    std::string formatBill(const Bill& bill, const BillOrderInfo& info)
     {
         std::string text;
-        const std::vector<Line> lines = billLines(bill, customerContact);
+        const std::vector<Line> lines = billLines(bill, info);
         for (size_t i = 0; i < lines.size(); i++) {
             if (i > 0)
                 text += '\n';
@@ -188,13 +210,13 @@ namespace pos {
 
     std::string PdfBillExporter::render(const Bill& bill) const
     {
-        std::string contact;
+        BillOrderInfo info;
         if (orders_) {
             const std::optional<Order> order = orders_->findById(bill.getOrderId());
             if (order)
-                contact = order->customerContact;
+                info = billOrderInfo(*order);
         }
-        const std::vector<Line> lines = billLines(bill, contact);
+        const std::vector<Line> lines = billLines(bill, info);
 
         int height = 2 * kMargin + static_cast<int>(lines.size()) * kLeading;
         if (height < kMinPageHeight)
