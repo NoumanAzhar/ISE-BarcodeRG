@@ -2,20 +2,32 @@
 #include <string>
 #include "Bill.h"
 #include "Data_Files.h"
+#include "order.h"
 
 namespace pos {
-
-    class IOrderRepository;   // order.h
 
     // ---- Text helpers shared by the PDF and by the reports ----
     std::string toMoneyText(double value);      // 1250.5 -> "1250.50"
     std::string toQuantityText(double value);   // 2 -> "2", 2.5 -> "2.5"
 
+    // What a bill prints that is not stored in Bill.txt: it lives in the order
+    // (Order.txt). A field that is empty is left off the bill.
+    struct BillOrderInfo {
+        std::string customerContact;   // phone number, optional
+        std::string paymentMode;       // see paymentModeText
+    };
+
+    // "Cash", "Bank-ABL", "Wallet-JazzCash". A card payment is shown as Bank and a
+    // wallet payment as Wallet; the merchant name is added after a dash when the
+    // order has one. Cash never shows a merchant. Empty for PaymentMode::None.
+    std::string paymentModeText(PaymentMode mode, const std::string& merchant);
+
+    // Phone number and payment mode taken from an order.
+    BillOrderInfo billOrderInfo(const Order& order);
+
     // The bill as monospace text (46 characters per line, lines joined by '\n').
-    // This is also exactly what the PDF contains. The customer's phone number is
-    // not part of Bill.txt (it is stored in Order.txt), so the caller passes it;
-    // the Phone line is left out when it is empty.
-    std::string formatBill(const Bill& bill, const std::string& customerContact = "");
+    // This is also exactly what the PDF contains.
+    std::string formatBill(const Bill& bill, const BillOrderInfo& info = BillOrderInfo());
 
     // kBillPdfDir + "/" + bill id + ".pdf"
     std::string billPdfPath(const Bill& bill);
@@ -33,8 +45,9 @@ namespace pos {
     // grows with the number of lines. Characters outside plain ASCII print as '?'.
     class PdfBillExporter : public IBillExporter {
     public:
-        // With an order repository the PDF also shows the customer's phone number
-        // (looked up by the bill's order id). Without one the Phone line is left out.
+        // With an order repository the PDF also shows the customer's phone number and
+        // the payment mode (looked up by the bill's order id). Without one those two
+        // lines are left out.
         explicit PdfBillExporter(const IOrderRepository* orders = nullptr);
         // Creates the folder if needed; writes a temp file, then renames it.
         bool exportBill(const Bill& bill, const std::string& path) override;
