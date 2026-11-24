@@ -173,13 +173,11 @@ namespace pos {
         return SeasonResult();
     }
 
-    SeasonResult SeasonService::setActive(int index, bool active)
+    bool SeasonService::setActive(int index, bool active)
     {
         if (index < 0 || static_cast<size_t>(index) >= repo_.all().size())
-            return fail(SeasonError::NotFound, "There is no such discount.");
-        if (!repo_.setActive(index, active))
-            return fail(SeasonError::SaveFailed, "The change could not be saved.");
-        return SeasonResult();
+            return false;
+        return repo_.setActive(index, active);
     }
 
     double SeasonService::percentOn(const std::string& date) const
