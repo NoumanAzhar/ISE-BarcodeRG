@@ -25,14 +25,14 @@ namespace pos {
         categories_(kCategoryFile),
         seasonRepo_(kSeasonFile),
         orders_(kOrderFile, kOrderDetailFile),
-        bills_(kBillFile, kBillDetailFile),
+        bills_(kBillFile, kBillDetailFile, &products_),
+        approvals_(kApprovalFile),
         categoryService_(categories_),
         productService_(products_, categories_),
         inventory_(products_, categories_),
         seasonService_(seasonRepo_),
         billGenerator_(orders_, products_, bills_),
-        editPolicy_(clock_),
-        orderEdit_(orders_, bills_, editPolicy_),
+        orderEdit_(orders_, approvals_, clock_),
         checkout_(orders_, products_, inventory_, seasonService_, orderEdit_, clock_, billGenerator_),
         order_(products_),
         hold_(order_, orders_, clock_),
@@ -44,6 +44,15 @@ namespace pos {
         ensureDataFolders();
         products_.assignIDs();
         startupReport_ = assigner_.assignAll();
+
+        // An archived order must show as archived on its bill too.
+        orderEdit_.setStatusHandler([this](const Order& order) {
+            std::optional<Bill> bill = bills_.findByOrderId(order.id);
+            if (!bill)
+                return;
+            bill->setOrderStatus(toString(order.status));
+            bills_.replace(*bill);
+        });
     }
 
-} // namespace pos
+} // namespace pos
