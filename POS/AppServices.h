@@ -34,6 +34,7 @@ namespace pos {
         FileCategoryRepository& categories() { return categories_; }
         IOrderRepository& orders() { return orders_; }
         IBillRepository& bills() { return bills_; }
+        IApprovalRepository& approvals() { return approvals_; }
         // services
         CategoryService& categoryService() { return categoryService_; }
         ProductService& productService() { return productService_; }
@@ -57,13 +58,13 @@ namespace pos {
         FileSeasonRepository seasonRepo_;
         FileOrderRepository orders_;
         FileBillRepository bills_;
+        FileApprovalRepository approvals_;
         SystemClock clock_;
         CategoryService categoryService_;
         ProductService productService_;
         InventoryService inventory_;
         SeasonService seasonService_;
         BillGenerator billGenerator_;
-        OrderEditPolicy editPolicy_;
         OrderEditService orderEdit_;
         CheckoutService checkout_;
         OrderService order_;

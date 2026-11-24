@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QString>
 #include <QWidget>
 
 // Base class of every screen that lives inside a Workspace (rail + page).
@@ -17,4 +18,9 @@ public:
     virtual void onActivated() {}     // the page became visible
     virtual void onDeactivated() {}   // the page is about to be hidden
     virtual void resetState() {}      // the role is being left: drop typed text, results, selection
+
+signals:
+    // Asks the workspace to show the page with this title (e.g. after an order was
+    // opened for editing). The page does not know the Workspace; it only names a title.
+    void openPageRequested(const QString& pageTitle);
 };

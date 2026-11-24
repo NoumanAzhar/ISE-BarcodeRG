@@ -54,7 +54,7 @@ namespace pos {
         // 0 < percent <= 100, both dates real, end not before start, not an exact duplicate
         SeasonResult add(const Season& season);
         // index = position in the list the GUI shows (the same order as all())
-        SeasonResult setActive(int index, bool active);
+        bool setActive(int index, bool active);   // false if there is no such season or the save fails
         // The highest percent among the active seasons that cover the date
         // (ends included). 0 if none covers it or the date is invalid.
         // Overlapping seasons are not added together.

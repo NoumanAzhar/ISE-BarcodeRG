@@ -3,6 +3,7 @@
 #include<string>
 #include<utility>
 #include"Product.h"
+namespace pos {
 struct BillTotals {
 	double withoutTax = 0;
 	double tax = 0;
@@ -50,4 +51,7 @@ public:
 	const std::string& getDate() const;
 	const std::string& getTime() const;
 	const std::string& getOrderStatus() const;
+	//Setter: the bill status follows the order status (e.g. paid -> archived)
+	void setOrderStatus(const std::string& status);
 };
+} // namespace pos

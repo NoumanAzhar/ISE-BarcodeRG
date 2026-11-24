@@ -2,6 +2,7 @@
 #include<cmath>
 #include"Bill.h"
 using namespace std;
+namespace pos {
 //we need to round some amounts to 2 decimal places
 namespace 
 {
@@ -106,3 +107,8 @@ const string& Bill::getTime() const {
 const string& Bill::getOrderStatus() const {
 	return orderStatus;
 }
+
+void Bill::setOrderStatus(const std::string& status) {
+	orderStatus = status;
+}
+} // namespace pos

@@ -6,6 +6,7 @@ class QWidget;
 namespace pos { class AppServices; }
 
 // Payment dialog -> checkout -> bill dialog for the current draft order.
+// Works for a new order, a resumed on-hold order and an edited paid order.
 // Not a widget: the order page calls run() and shows the outcome in its banner.
 class CheckoutFlow {
 public:

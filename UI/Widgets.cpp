@@ -43,6 +43,17 @@ QLabel* makeLabel(const QString& text, const char* objectName, QWidget* parent)
     return label;
 }
 
+QWidget* makeField(const QString& caption, QWidget* input, QWidget* parent)
+{
+    auto* field = new QWidget(parent);
+    auto* layout = new QVBoxLayout(field);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    layout->addWidget(makeLabel(caption, "fieldLabel", field));
+    layout->addWidget(input);
+    return field;
+}
+
 NeuFrame* makeCard(QWidget* parent)
 {
     return new NeuFrame(NeuStyle::Raised, 20, parent);
@@ -209,6 +220,87 @@ void IconWidget::paintEvent(QPaintEvent*)
         p.drawRoundedRect(QRectF(10, 28, 80, 56), 10, 10);
         p.drawRoundedRect(QRectF(34, 14, 26, 14), 4, 4);
         p.drawEllipse(QPointF(50, 56), 17, 17);
+        break;
+    }
+
+    case Categories: {                                      // price tag
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        QPainterPath tag;
+        tag.moveTo(16, 16);
+        tag.lineTo(52, 16);
+        tag.lineTo(88, 52);
+        tag.lineTo(54, 86);
+        tag.lineTo(16, 48);
+        tag.closeSubpath();
+        p.drawPath(tag);
+        p.setPen(Qt::NoPen);
+        p.setBrush(ink);
+        p.drawEllipse(QPointF(34, 34), 6, 6);
+        break;
+    }
+
+    case Inventory: {                                       // shelves with boxes
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(QRectF(12, 12, 76, 76), 10, 10);
+        p.drawLine(QPointF(12, 50), QPointF(88, 50));
+        p.setPen(Qt::NoPen);
+        p.setBrush(ink);
+        p.drawRoundedRect(QRectF(24, 26, 20, 16), 3, 3);
+        p.drawRoundedRect(QRectF(54, 26, 20, 16), 3, 3);
+        p.drawRoundedRect(QRectF(38, 62, 24, 16), 3, 3);
+        break;
+    }
+
+    case Discount: {                                        // percent badge
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QPointF(50, 50), 38, 38);
+        p.drawLine(QPointF(36, 66), QPointF(64, 34));
+        p.setPen(Qt::NoPen);
+        p.setBrush(ink);
+        p.drawEllipse(QPointF(37, 37), 6, 6);
+        p.drawEllipse(QPointF(63, 63), 6, 6);
+        break;
+    }
+
+    case Reports: {                                         // line chart
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        QPainterPath axes;
+        axes.moveTo(14, 12);
+        axes.lineTo(14, 86);
+        axes.lineTo(88, 86);
+        p.drawPath(axes);
+        QPainterPath line;
+        line.moveTo(28, 66);
+        line.lineTo(46, 46);
+        line.lineTo(60, 58);
+        line.lineTo(84, 24);
+        p.drawPath(line);
+        break;
+    }
+
+    case Orders: {                                          // clipboard with lines
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawRoundedRect(QRectF(20, 16, 60, 74), 8, 8);
+        p.drawRoundedRect(QRectF(36, 8, 28, 16), 5, 5);
+        p.drawLine(QPointF(34, 44), QPointF(66, 44));
+        p.drawLine(QPointF(34, 60), QPointF(66, 60));
+        p.drawLine(QPointF(34, 76), QPointF(52, 76));
+        break;
+    }
+
+    case Hold: {                                            // pause
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QPointF(50, 50), 38, 38);
+        p.setPen(Qt::NoPen);
+        p.setBrush(ink);
+        p.drawRoundedRect(QRectF(36, 32, 9, 36), 3, 3);
+        p.drawRoundedRect(QRectF(55, 32, 9, 36), 3, 3);
         break;
     }
     }

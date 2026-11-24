@@ -4,6 +4,7 @@
 #include "CameraScannerWidget.h"
 #include "Format.h"
 #include "Neu.h"
+#include "PosActions.h"
 #include "ProductDetailsView.h"
 #include "Theme.h"
 #include "Widgets.h"
@@ -280,7 +281,7 @@ void ReadPage::showDigits(const QString& digits)
     m_copyBtn->setEnabled(true);
 
     if (const auto product = m_services.catalog().lookup(ss(digits)))
-        m_details->showProduct(*product);
+        m_details->showProduct(*product, PosActions::categoryName(m_services, *product));
     else
         m_details->showMessage("No product has this barcode");
 }

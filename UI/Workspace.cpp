@@ -4,6 +4,7 @@
 
 #include <QHBoxLayout>
 #include <QKeySequence>
+#include <QScrollArea>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -23,10 +24,10 @@ public:
         setToolTip(label);
 
         auto* layout = new QVBoxLayout(this);
-        layout->setContentsMargins(4, 10, 4, 8);
-        layout->setSpacing(4);
+        layout->setContentsMargins(4, 8, 4, 6);
+        layout->setSpacing(3);
 
-        m_icon = new IconWidget(icon, 30, this);
+        m_icon = new IconWidget(icon, 28, this);
         m_label = makeLabel(label, "muted", this);
         m_label->setAlignment(Qt::AlignCenter);
         m_label->setWordWrap(true);
@@ -64,14 +65,24 @@ Workspace::Workspace(const QString& roleName, QWidget* parent)
     root->setContentsMargins(20, 8, 28, 22);
     root->setSpacing(18);
 
-    m_rail = new QWidget(this);
+    m_rail = new QWidget;
     m_rail->setObjectName("rail");
-    m_rail->setFixedWidth(104);
     m_railLayout = new QVBoxLayout(m_rail);
     m_railLayout->setContentsMargins(0, 0, 0, 0);
-    m_railLayout->setSpacing(6);
+    m_railLayout->setSpacing(4);
     m_railLayout->addStretch(1);
-    root->addWidget(m_rail);
+
+    // The rail scrolls (without a scroll bar) when the window is too short for every page.
+    auto* railScroll = new QScrollArea(this);
+    railScroll->setFixedWidth(104);
+    railScroll->setFrameShape(QFrame::NoFrame);
+    railScroll->setWidgetResizable(true);
+    railScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    railScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    railScroll->setWidget(m_rail);
+    railScroll->viewport()->setAutoFillBackground(false);
+    m_rail->setAutoFillBackground(false);        // setWidget() switches it back on
+    root->addWidget(railScroll);
 
     auto* right = new QVBoxLayout;
     right->setContentsMargins(0, 6, 0, 0);
@@ -94,6 +105,7 @@ void Workspace::addPage(const QString& title, IconWidget::Kind icon, PageBase* p
     m_entries.push_back({ title, item, page });
 
     connect(item, &NeuFrame::clicked, this, [this, index]() { select(index); });
+    connect(page, &PageBase::openPageRequested, this, &Workspace::showPage);
 
     if (index < 9) {
         auto* shortcut = new QShortcut(QKeySequence(QKeyCombination(Qt::ControlModifier, static_cast<Qt::Key>(Qt::Key_1 + index))), this);
@@ -121,6 +133,16 @@ void Workspace::select(int index)
     m_stack->setCurrentWidget(m_entries[index].page);
     if (isVisible())
         m_entries[index].page->onActivated();
+}
+
+void Workspace::showPage(const QString& title)
+{
+    for (int i = 0; i < int(m_entries.size()); ++i) {
+        if (m_entries[i].title == title) {
+            select(i);
+            return;
+        }
+    }
 }
 
 bool Workspace::canLeave()

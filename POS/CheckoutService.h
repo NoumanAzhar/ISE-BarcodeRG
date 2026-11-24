@@ -3,7 +3,7 @@
 #include <string>
 #include "Bill.h"
 #include "BillGenerator.h"
-#include "inventory.h"
+#include "Inventory.h"
 #include "order.h"
 #include "order_edit.h"
 #include "season.h"

@@ -5,14 +5,15 @@
 #include "CheckoutService.h"
 #include "OrderTotals.h"
 #include "PaymentDialog.h"
+#include "PosActions.h"
 
 namespace {
 
-void showBill(const pos::CheckoutResult& result, QWidget* parent)
+void showBill(pos::AppServices& services, const pos::CheckoutResult& result, QWidget* parent)
 {
     if (!result.bill)
         return;
-    BillDialog dialog(*result.bill, parent);
+    BillDialog dialog(*result.bill, services.exporter(), parent);
     dialog.exec();
 }
 
@@ -32,18 +33,30 @@ CheckoutFlow::Outcome CheckoutFlow::run(const QString& customerName,
     order.customerName = customerName.toStdString();
     order.customerContact = customerContact.toStdString();
 
-    const pos::OrderTotals totals = pos::computeTotals(order, m_services.products());
+    // The dialog asks for the amount to pay after a special discount; the same
+    // calculator that builds the saved bill answers it, so the two always agree.
+    const double season = PosActions::seasonPercentToday(m_services);
+    PaymentQuote quote;
+    quote.seasonalPercent = season;
+    quote.payableFor = [this, &order, season](double special) {
+        return pos::computeTotals(order, m_services.products(), season, special).payable;
+    };
 
-    PaymentDialog payment(totals.payable, parent);
-    if (payment.exec() != QDialog::Accepted)
+    PaymentDialog dialog(quote, parent);
+    if (dialog.exec() != QDialog::Accepted)
         return { Result::Cancelled, QString() };
 
-    const pos::CheckoutResult result = m_services.checkout().checkout(
-        order, payment.mode(), payment.merchant().toStdString());
+    pos::Payment payment;
+    payment.mode = dialog.mode();
+    payment.merchant = dialog.merchant().toStdString();
+    payment.amountReceived = dialog.amountReceived();
+    payment.specialPercent = dialog.specialPercent();
+
+    const pos::CheckoutResult result = m_services.checkout().checkout(order, payment);
     const QString message = QString::fromStdString(result.message);
 
     if (result.ok()) {
-        showBill(result, parent);
+        showBill(m_services, result, parent);
         m_services.order().start("");
         return { Result::Saved, message };
     }
@@ -51,10 +64,11 @@ CheckoutFlow::Outcome CheckoutFlow::run(const QString& customerName,
     // The order is already saved as paid; only the bill or the stock update failed.
     if (result.status == pos::CheckoutStatus::BillFailed
         || result.status == pos::CheckoutStatus::StockUpdateFailed) {
-        showBill(result, parent);
+        showBill(m_services, result, parent);
         m_services.order().start("");
         return { Result::SavedWithWarning, message };
     }
 
+    // Not saved (amount too low, special discount too high, edit no longer allowed, ...).
     return { Result::Failed, message };
 }

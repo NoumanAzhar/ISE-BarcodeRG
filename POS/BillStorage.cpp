@@ -10,11 +10,11 @@ using pos::readRecords;
 using pos::writeRecords;
 using pos::appendRecord;
 using pos::Product;
+namespace pos {
 
 namespace {
 	constexpr size_t kBillFields = 14;
-	constexpr size_t kDetailHeader = 2;   // bill id + product count
-	constexpr size_t kItemFields = 4;     // acronym, price, quantity, discount
+	constexpr size_t kDetailFields = 5;   // bill id, acronym, price, quantity, discount
 
 	//handling decimals
 	string formatMoney(double v) { 
@@ -43,21 +43,18 @@ namespace {
 				 b.getOrderStatus(), formatMoney(b.getSeasonalDiscount()),
 				 formatMoney(b.getSpecialDiscount()), b.getDate(), b.getTime() };
 	}
-	//For BillDetails.txt
-	Record detailRecord(const Bill& b) {
-		const auto& items = b.getProducts();
-		Record r = { b.getBillId(), to_string(items.size())};
-		for (size_t i = 0; i < items.size(); i++) {
-			const Product& p = items[i].first;
-			double qty = items[i].second;
-			r.push_back(p.acronym);
-			r.push_back(formatMoney(p.unitPrice));
-			r.push_back(formatQuantity(qty));
-			r.push_back(formatMoney(p.discount * qty));
+	//BillDetail.txt: one row per product: billId acronym unitPrice quantity discount(total for the line)
+	vector<Record> detailRecords(const Bill& b) {
+		vector<Record> rows;
+		for (const auto& item : b.getProducts()) {
+			const Product& p = item.first;
+			double qty = item.second;
+			rows.push_back({ b.getBillId(), p.acronym, formatMoney(p.unitPrice),
+							 formatQuantity(qty), formatMoney(p.discount * qty) });
 		}
-		return r;
+		return rows;
 	}
-	optional<Bill> recordToBill(const Record& r, const map<string, Record>& detailsById) {
+	optional<Bill> recordToBill(const Record& r, const map<string, vector<Record>>& detailsById, const IProductRepository* catalog) {
 		if (r.size() != kBillFields)
 			return nullopt;
 		BillTotals t;
@@ -70,26 +67,22 @@ namespace {
 		auto found = detailsById.find(r[0]);
 		if (found == detailsById.end())
 			return nullopt;
-		const Record& d = found->second;
-
-		double countValue;
-		if (!parseDouble(d[1], countValue) || countValue < 1) 
-			return nullopt;
-		size_t n = static_cast<size_t>(countValue);
-		if (d.size() != kDetailHeader + n * kItemFields) 
-			return nullopt;
+		const vector<Record>& rows = found->second;
 
 		vector<pair<pos::Product, double>> items;
-		for (size_t i = 0; i < n; i++) {
-			size_t at = kDetailHeader + i * kItemFields;
+		for (const Record& d : rows) {
 			double price, qty, discount;
-			if (!parseDouble(d[at + 1], price) || !parseDouble(d[at + 2], qty) ||
-				!parseDouble(d[at + 3], discount) || qty <= 0) 
+			if (d.size() != kDetailFields || !parseDouble(d[2], price) || !parseDouble(d[3], qty) ||
+				!parseDouble(d[4], discount) || qty <= 0)
 				return nullopt;
 			Product p;
-			p.acronym = d[at];
+			p.acronym = d[1];
 			p.unitPrice = price;
 			p.discount = discount / qty;      // file stores per-unit discount x quantity
+			if (catalog) {                    // name and tax are not stored in BillDetail.txt
+				const optional<Product> known = catalog->findByAcronym(d[1]);
+				if (known) { p.id = known->id; p.name = known->name; p.tax = known->tax; p.unit = known->unit; }
+			}
 			items.push_back({ p, qty });
 		}
 		try { 
@@ -100,14 +93,16 @@ namespace {
 		}
 	}
 }
-FileBillRepository::FileBillRepository(string billFile, string detailFile) :billFile(billFile), detailFile(detailFile) {}
+FileBillRepository::FileBillRepository(string billFile, string detailFile, const IProductRepository* products)
+	:billFile(billFile), detailFile(detailFile), products_(products) {}
 
 bool FileBillRepository::save(const Bill& bill) {
 	for (const Record& row : readRecords(billFile))
 		if (!row.empty() && row[0] == bill.getBillId())	//need unique id
 			return false;
-	if (!appendRecord(detailFile, detailRecord(bill)))
-		return false;
+	for (const Record& row : detailRecords(bill))
+		if (!appendRecord(detailFile, row))
+			return false;
 	return appendRecord(billFile, billToRecord(bill));
 }
 bool FileBillRepository::replace(const Bill& bill) {
@@ -126,19 +121,19 @@ bool FileBillRepository::replace(const Bill& bill) {
 	for (const Record& row : readRecords(detailFile))
 		if (row.empty() || row[0] != bill.getBillId()) 
 			details.push_back(row);
-	details.push_back(detailRecord(bill));
+	for (const Record& row : detailRecords(bill)) details.push_back(row);
 	return writeRecords(detailFile, details) && writeRecords(billFile, bills);
 }
 vector<Bill> FileBillRepository::all() const {
 	warningList.clear();
-	map<string, Record> detailsById;
+	map<string, vector<Record>> detailsById;
 	for (const Record& row : readRecords(detailFile))
-		if (row.size() >= kDetailHeader)
-			detailsById[row[0]] = row;
+		if (!row.empty())
+			detailsById[row[0]].push_back(row);
 	vector<Bill> result;
 	const vector<Record> rows = readRecords(billFile);
 	for (size_t i = 0; i < rows.size(); i++) {
-		optional<Bill> bill = recordToBill(rows[i], detailsById);
+		optional<Bill> bill = recordToBill(rows[i], detailsById, products_);
 		if (bill) 
 			result.push_back(*bill);
 		else 
@@ -177,3 +172,4 @@ string FileBillRepository::nextId() const {
 const vector<string>& FileBillRepository::warnings() const {
 	return warningList;
 }
+} // namespace pos

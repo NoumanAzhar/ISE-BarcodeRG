@@ -166,6 +166,25 @@ QLineEdit[neu="true"]:focus { border: none; }
 QLineEdit[neu="true"][locked="true"] { color: @muted; }
 QLineEdit[neu="true"][large="true"] { font-size: 26px; font-weight: 600; }
 
+/* ---- drop-down (same look as the inputs) ---- */
+QComboBox {
+    background: @surface2; color: @text; border: 1px solid @border; border-radius: 12px;
+    padding: 0px 14px; min-height: 44px; font-size: 15px; font-weight: 500;
+}
+QComboBox:focus, QComboBox:on { border: 1px solid @accent; }
+QComboBox:disabled { color: @muted; }
+QComboBox::drop-down { border: none; width: 34px; }
+QComboBox::down-arrow {
+    width: 0px; height: 0px; margin-right: 12px;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6px solid @muted;
+}
+QComboBox QAbstractItemView {
+    background: @surface2; color: @text; border: 1px solid @border;
+    selection-background-color: @accent; selection-color: @on_accent; outline: none; padding: 4px;
+}
+QComboBox QAbstractItemView::item { min-height: 32px; padding-left: 10px; }
+
 /* ---- lists and tables (put them inside an inset well) ---- */
 QListWidget, QListView, QTableWidget, QTableView, QTreeView {
     background: transparent; border: none; outline: none;

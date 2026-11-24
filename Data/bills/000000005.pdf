@@ -1,0 +1,99 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 322 396] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1339 >>
+stream
+BT
+12 TL
+36 351 Td
+/F2 9 Tf
+(                  BARCODERG) Tj
+T*
+/F1 9 Tf
+(                     Bill) Tj
+T*
+(----------------------------------------------) Tj
+T*
+(Bill id     : 000000005) Tj
+T*
+(Order id    : 00000625) Tj
+T*
+(Customer    : Nouman) Tj
+T*
+(Phone       : 03166076692) Tj
+T*
+(Payment Mode: Cash) Tj
+T*
+(Date        : 2026-11-25  01:58:59) Tj
+T*
+(Status      : PAID) Tj
+T*
+(----------------------------------------------) Tj
+T*
+/F2 9 Tf
+(ITEM         QTY     PRICE     DISC     AMOUNT) Tj
+T*
+/F1 9 Tf
+(SUGAR          2    180.00     0.00     360.00) Tj
+T*
+(DALDA          1    560.00     0.00     560.00) Tj
+T*
+(OLPERS         2    340.00    20.00     680.00) Tj
+T*
+(SOOPER         2     40.00     4.00      80.00) Tj
+T*
+(----------------------------------------------) Tj
+T*
+(Subtotal                               1680.00) Tj
+T*
+(Tax                                     168.00) Tj
+T*
+(Product discount                        -24.00) Tj
+T*
+(Special discount                        -91.20) Tj
+T*
+(----------------------------------------------) Tj
+T*
+/F2 9 Tf
+(PAYABLE                            PKR 1732.80) Tj
+T*
+/F1 9 Tf
+(Amount received                        1732.80) Tj
+T*
+(Balance returned                          0.00) Tj
+T*
+(----------------------------------------------) Tj
+T*
+(                  Thank you) Tj
+T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000001642 00000 n 
+0000001710 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1783
+%%EOF

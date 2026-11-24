@@ -54,6 +54,7 @@ QWidget* ProductDetailsView::buildDetailsPage()
     grid->setColumnStretch(1, 1);
 
     m_acronym = addRow(grid, "Acronym");
+    m_category = addRow(grid, "Category", &m_categoryKey);
     m_id = addRow(grid, "Product ID");
     m_barcode = addRow(grid, "Barcode");
     m_unit = addRow(grid, "Unit");
@@ -68,7 +69,7 @@ QWidget* ProductDetailsView::buildDetailsPage()
     return page;
 }
 
-QLabel* ProductDetailsView::addRow(QGridLayout* grid, const QString& label)
+QLabel* ProductDetailsView::addRow(QGridLayout* grid, const QString& label, QLabel** keyOut)
 {
     const int row = grid->rowCount();
     auto* key = makeLabel(label, "muted", this);
@@ -76,13 +77,25 @@ QLabel* ProductDetailsView::addRow(QGridLayout* grid, const QString& label)
     value->setWordWrap(true);
     grid->addWidget(key, row, 0, Qt::AlignTop);
     grid->addWidget(value, row, 1, Qt::AlignTop);
+    if (keyOut)
+        *keyOut = key;
     return value;
 }
 
-void ProductDetailsView::showProduct(const pos::Product& p)
+void ProductDetailsView::showProduct(const pos::Product& p, const std::optional<QString>& categoryName)
 {
     m_name->setText(qs(p.name));
     m_acronym->setText(qs(p.acronym));
+
+    m_categoryKey->setVisible(categoryName.has_value());
+    m_category->setVisible(categoryName.has_value());
+    if (categoryName.value_or(QString()).isEmpty()) {
+        m_category->setText("none");
+        setRole(m_category, "muted");
+    } else {
+        m_category->setText(*categoryName);
+        setRole(m_category, "fieldLabel");
+    }
     m_id->setText(qs(p.id));
 
     if (p.barcode.empty()) {

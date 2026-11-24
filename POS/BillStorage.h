@@ -3,6 +3,8 @@
 #include<string>
 #include<vector>
 #include"Bill.h"
+#include"Product.h"
+namespace pos {
 class IBillRepository {
 public:
 	virtual ~IBillRepository() = default;
@@ -16,8 +18,10 @@ public:
 class FileBillRepository : public IBillRepository{
 	std::string billFile, detailFile;
 	mutable std::vector<std::string> warningList;
+	const IProductRepository* products_;
 public:
-	FileBillRepository(std::string billFile, std::string detailFile);
+	//products (optional): used to fill the product name and tax of bills read back from the files
+	FileBillRepository(std::string billFile, std::string detailFile, const IProductRepository* products = nullptr);
 	bool save(const Bill& bill)override;
 	bool replace(const Bill& bill)override;
 	std::optional<Bill> findById(const std::string& billId) const override;
@@ -26,3 +30,4 @@ public:
 	std::string nextId() const override;
 	const std::vector<std::string>& warnings() const;
 };
+} // namespace pos

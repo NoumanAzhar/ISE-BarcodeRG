@@ -41,6 +41,9 @@ QPixmap fitPixmap(const QPixmap& src, const QSize& area);
 // A QLabel with an object name from the style sheet (see Theme.h).
 QLabel* makeLabel(const QString& text, const char* objectName, QWidget* parent = nullptr);
 
+// A caption over an input: the usual form row.
+QWidget* makeField(const QString& caption, QWidget* input, QWidget* parent = nullptr);
+
 // Raised card / inset well (both already hold their shadow room as contents margin).
 NeuFrame* makeCard(QWidget* parent = nullptr);
 NeuFrame* makeWell(QWidget* parent = nullptr);
@@ -51,7 +54,8 @@ NeuFrame* makeWell(QWidget* parent = nullptr);
 class IconWidget : public QWidget {
     Q_OBJECT
 public:
-    enum Kind { Logo, Generate, Scan, Cashier, Manager, Order, Products, Camera };
+    enum Kind { Logo, Generate, Scan, Cashier, Manager, Order, Products, Camera,
+                Categories, Inventory, Discount, Reports, Orders, Hold };
     IconWidget(Kind kind, int size, QWidget* parent = nullptr);
 
     void setMuted(bool muted);    // grey instead of accent (inactive rail items)

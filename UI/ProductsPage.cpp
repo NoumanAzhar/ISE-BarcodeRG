@@ -7,7 +7,9 @@
 #include "ProductEditDialog.h"
 #include "Theme.h"
 #include "Widgets.h"
+#include "access.h"
 #include "barcode_assign.h"
+#include "Category.h"
 
 #include <QAbstractButton>
 #include <QAbstractSlider>
@@ -32,7 +34,7 @@
 
 namespace {
 
-enum Column { ColAcronym, ColName, ColPrice, ColStock, ColBarcode, ColCount };
+enum Column { ColAcronym, ColName, ColCategory, ColPrice, ColStock, ColBarcode, ColCount };
 
 constexpr int kWarningMs = 5000;
 constexpr int kAcronymIndent = 10;  // pixels the Acronym values are moved to the right
@@ -116,7 +118,7 @@ QWidget* ProductsPage::buildListSide()
     wellLayout->setContentsMargins(8, 8, 8, 8);
 
     m_table = new QTableWidget(0, ColCount, well);
-    m_table->setHorizontalHeaderLabels({ "Acronym", "Name", "Price", "Stock", "Barcode" });
+    m_table->setHorizontalHeaderLabels({ "Acronym", "Name", "Category", "Price", "Stock", "Barcode" });
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -191,6 +193,8 @@ QWidget* ProductsPage::buildDetailsCard()
     connect(m_editBtn, &NeuButton::clicked, this, &ProductsPage::editSelected);
 
     auto* assignBtn = new NeuButton("Assign barcodes", NeuButton::Variant::Primary, card);
+    assignBtn->setToolTip("Creates a barcode for every product that does not have one yet.");
+    assignBtn->setVisible(pos::isAllowed(pos::Role::Manager, pos::Action::GenerateBarcode));
     connect(assignBtn, &NeuButton::clicked, this, &ProductsPage::assignBarcodes);
 
     btnRow->addWidget(m_editBtn, 1);
@@ -272,6 +276,9 @@ bool ProductsPage::eventFilter(QObject* watched, QEvent* event)
 void ProductsPage::reload()
 {
     m_products = m_services.products().all();
+    m_categoryNames.clear();
+    for (const pos::Category& c : m_services.categories().all())
+        m_categoryNames.insert(qs(c.id), qs(c.name));
     applyFilter();                               // keeps the selected product if it still exists
 }
 
@@ -283,14 +290,15 @@ void ProductsPage::applyFilter()
     m_table->blockSignals(true);
     m_table->setRowCount(0);
     for (const pos::Product& p : m_products) {
-        if (needle.isEmpty() || matches(p, needle))
+        if (needle.isEmpty() || matches(p, needle)
+            || categoryName(p.categoryId).toLower().contains(needle))
             addRow(p);
     }
     m_table->blockSignals(false);
     updateNameIndent();
 
     if (m_table->rowCount() == 0) {
-        m_emptyLabel->setText(m_products.empty() ? "No products in Product.txt"
+        m_emptyLabel->setText(m_products.empty() ? "No products yet.\nAdd the first one with Add Product."
                                                  : "No product matches your search");
         m_listStack->setCurrentIndex(1);
     } else {
@@ -357,6 +365,8 @@ void ProductsPage::addRow(const pos::Product& p)
     auto* name = makeItem(qs(p.name));
     name->setIcon(spacerIcon(nameIndent()));
     m_table->setItem(row, ColName, name);
+    const QString category = categoryName(p.categoryId);
+    m_table->setItem(row, ColCategory, makeItem(category.isEmpty() ? QString("-") : category));
     m_table->setItem(row, ColPrice, makeItem(formatPkr(p.unitPrice), Qt::AlignRight | Qt::AlignVCenter));
     m_table->setItem(row, ColStock, stock);
     m_table->setItem(row, ColBarcode, makeItem(qs(p.barcode)));
@@ -400,10 +410,15 @@ void ProductsPage::showSelected()
         m_details->showMessage("Select a product");
         m_barcodePixmap = QPixmap();
     } else {
-        m_details->showProduct(*it);
+        m_details->showProduct(*it, categoryName(it->categoryId));
         m_barcodePixmap = QPixmap(qs(it->barcodeFile));
     }
     showBarcodeImage();
+}
+
+QString ProductsPage::categoryName(const std::string& categoryId) const
+{
+    return m_categoryNames.value(qs(categoryId));
 }
 
 void ProductsPage::showBarcodeImage()
@@ -434,8 +449,18 @@ void ProductsPage::addProduct()
     ProductEditDialog dialog(m_services, std::nullopt, this);
     if (dialog.exec() == QDialog::Accepted) {
         reload();
-        selectById(qs(dialog.savedProductId()));
-        m_banner->showMessage("Product added successfully", Banner::Success);
+        const std::string id = dialog.savedProductId();
+        selectById(qs(id));
+        if (!dialog.savedNotice().isEmpty()) {
+            m_banner->showMessage(dialog.savedNotice(), Banner::Warning, kWarningMs);
+            return;
+        }
+        const auto added = std::find_if(m_products.begin(), m_products.end(),
+                                        [&id](const pos::Product& p) { return p.id == id; });
+        const QString barcode = added != m_products.end() ? qs(added->barcode) : QString();
+        m_banner->showMessage(barcode.isEmpty() ? QString("Product added.")
+                                                : "Product added. Its barcode is " + barcode + ".",
+                              Banner::Success, kWarningMs);
     }
 }
 
@@ -454,6 +479,6 @@ void ProductsPage::editSelected()
     if (dialog.exec() == QDialog::Accepted) {
         reload();
         selectById(qs(id));
-        m_banner->showMessage("Product updated successfully", Banner::Success);
+        m_banner->showMessage("Changes saved.", Banner::Success);
     }
 }

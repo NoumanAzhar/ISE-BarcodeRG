@@ -23,6 +23,7 @@ public:
 
     const QString& roleName() const { return m_roleName; }
     void addPage(const QString& title, IconWidget::Kind icon, PageBase* page);
+    void showPage(const QString& title);   // selects the page with this title, if there is one
 
     bool canLeave();     // asks the visible page whether it may be left
     void enter();        // the workspace became visible: activates the visible page

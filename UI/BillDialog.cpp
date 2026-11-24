@@ -1,10 +1,15 @@
 #include "BillDialog.h"
 
 #include "Bill.h"
+#include "Data_Files.h"
 #include "Format.h"
 #include "Neu.h"
 #include "Widgets.h"
+#include "bill_pdf.h"
 
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -12,11 +17,12 @@
 #include <QLabel>
 #include <QScreen>
 #include <QScrollArea>
+#include <QUrl>
 #include <QVBoxLayout>
 
 namespace {
 
-constexpr int kPaperWidth = 360;
+constexpr int kPaperWidth = 380;
 constexpr double kMaxScreenShare = 0.8;
 
 // Thin rule on the paper (white paper is the one allowed hard-coded colour area).
@@ -61,8 +67,8 @@ QString negative(double amount)
 
 } // namespace
 
-BillDialog::BillDialog(const Bill& bill, QWidget* parent)
-    : QDialog(parent)
+BillDialog::BillDialog(const pos::Bill& bill, pos::IBillExporter& exporter, QWidget* parent)
+    : QDialog(parent), m_bill(bill), m_exporter(exporter)
 {
     setWindowTitle("Bill");
     if (const QScreen* screen = QGuiApplication::primaryScreen())
@@ -78,16 +84,16 @@ BillDialog::BillDialog(const Bill& bill, QWidget* parent)
     paper->setStyleSheet("QFrame#paper { background: #ffffff; border-radius: 14px; }");
     paper->setFixedWidth(kPaperWidth);
     auto* paperLayout = new QVBoxLayout(paper);
-    paperLayout->setContentsMargins(20, 18, 20, 18);
+    paperLayout->setContentsMargins(22, 20, 22, 18);
     paperLayout->setSpacing(6);
 
     auto* title = new QHBoxLayout;
     title->addWidget(makeLabel("Bill", "paperTitle", paper));
     title->addStretch(1);
-    auto* billId = makeLabel(qs(bill.getBillId()), "paperMuted", paper);
-    title->addWidget(billId);
+    title->addWidget(makeLabel(qs(bill.getBillId()), "paperMuted", paper));
     paperLayout->addLayout(title);
 
+    paperLayout->addLayout(makePair("Date", qs(bill.getDate()) + "   " + qs(bill.getTime()), paper));
     paperLayout->addLayout(makePair("Customer", qs(bill.getCustomerName()), paper));
     paperLayout->addLayout(makePair("Order", qs(bill.getOrderId()), paper));
     paperLayout->addLayout(makePair("Status", qs(bill.getOrderStatus()).toUpper(), paper));
@@ -133,30 +139,63 @@ BillDialog::BillDialog(const Bill& bill, QWidget* parent)
     items->setStyleSheet("QWidget#billItems { background: transparent; }");
     paperLayout->addWidget(scroll, 1);
 
+    // ------------------------------------------------------------ totals
     paperLayout->addWidget(makeRule(paper));
     paperLayout->addSpacing(4);
     paperLayout->addLayout(makePair("Subtotal", formatPkr(bill.getTotalWithoutTax()), paper));
     paperLayout->addLayout(makePair("Tax", formatPkr(bill.getTotalTax()), paper));
-    paperLayout->addLayout(makePair("Discount", negative(bill.getTotalDiscount()), paper));
+    paperLayout->addLayout(makePair("Item discounts", negative(bill.getTotalDiscount()), paper));
+    if (bill.getSeasonalDiscount() > 0)
+        paperLayout->addLayout(makePair("Season offer", negative(bill.getSeasonalDiscount()), paper));
+    if (bill.getSpecialDiscount() > 0)
+        paperLayout->addLayout(makePair("Special discount", negative(bill.getSpecialDiscount()), paper));
     paperLayout->addSpacing(4);
 
     auto* payable = new QHBoxLayout;
-    payable->addWidget(makeBold("Payable", "paperInk", paper));
+    payable->addWidget(makeBold("Total to pay", "paperInk", paper));
     payable->addStretch(1);
     payable->addWidget(makeLabel(formatPkr(bill.getTotalBill()), "paperTotal", paper));
     paperLayout->addLayout(payable);
 
-    // -------------------------------------------------------------- Done
+    if (bill.getAmountReceived() > 0) {
+        paperLayout->addSpacing(2);
+        paperLayout->addLayout(makePair("Received", formatPkr(bill.getAmountReceived()), paper));
+        paperLayout->addLayout(makePair("Change", formatPkr(bill.getBalanceReturned()), paper));
+    }
+
+    // ----------------------------------------------------------- buttons
+    m_banner = new Banner(this);
+
+    auto* pdfBtn = new NeuButton("Save as PDF", NeuButton::Variant::Normal, this);
+    pdfBtn->setAutoDefault(false);
     auto* doneBtn = new NeuButton("Done", NeuButton::Variant::Primary, this);
     doneBtn->setDefault(true);
+    connect(pdfBtn, &NeuButton::clicked, this, &BillDialog::savePdf);
     connect(doneBtn, &NeuButton::clicked, this, &QDialog::accept);
 
     auto* buttons = new QHBoxLayout;
+    buttons->setSpacing(2);
+    buttons->addWidget(pdfBtn);
     buttons->addStretch(1);
     buttons->addWidget(doneBtn);
 
     layout->addWidget(paper, 1);
+    layout->addWidget(m_banner);
     layout->addLayout(buttons);
+}
+
+void BillDialog::savePdf()
+{
+    const QString dir = QString::fromLatin1(pos::kBillPdfDir);
+    QDir().mkpath(dir);
+    const QString path = dir + "/" + qs(m_bill.getBillId()) + ".pdf";
+
+    if (!m_exporter.exportBill(m_bill, ss(path))) {
+        m_banner->showMessage("The PDF could not be created.", Banner::Error, 4000);
+        return;
+    }
+    m_banner->showMessage("PDF saved to " + path, Banner::Success, 4000);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()));   // opens it for printing
 }
 
 void BillDialog::keyPressEvent(QKeyEvent* event)
