@@ -250,6 +250,17 @@ namespace pos {
 		return nullopt;
 	}
 
+	bool FileOrderRepository::containsProduct(const string& productId) const
+	{
+		for (const Record& row : readRecords(detailFile_)) {
+			// row: orderId, then productId barcode quantity for every item
+			for (size_t i = 1; i < row.size(); i += 3) {
+				if (row[i] == productId) return true;
+			}
+		}
+		return false;
+	}
+
 	int FileOrderRepository::count() const
 	{
 		return static_cast<int>(readRecords(orderFile_).size());
