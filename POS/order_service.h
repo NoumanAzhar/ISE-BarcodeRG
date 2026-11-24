@@ -1,10 +1,10 @@
 #pragma once
 #include <optional>
 #include <string>
+#include <map>
 #include <vector>
 #include "order.h"
 #include "Product.h"
-using namespace std;
 
 namespace pos {
 
@@ -22,10 +22,10 @@ namespace pos {
     public:
         explicit OrderService(const IProductRepository& products);
 
-        void start(const string& customerName, const string& contact = "");
-        AddResult addByBarcode(const string& barcode, double quantity = 1);
-        bool setQuantity(const string& productId, double quantity);   // replaces the quantity
-        bool removeItem(const string& productId);
+        void start(const std::string& customerName, const std::string& contact = "");
+        AddResult addByBarcode(const std::string& barcode, double quantity = 1);
+        bool setQuantity(const std::string& productId, double quantity);   // replaces the quantity
+        bool removeItem(const std::string& productId);
         void clear();                                                 // items only; customer kept
         const Order& current() const;
 
@@ -34,11 +34,14 @@ namespace pos {
         bool load(const Order& order);
 
     private:
-        vector<OrderItem>::iterator findItem(const string& productId);
-        double quantityOf(const string& productId) const;
+        std::vector<OrderItem>::iterator findItem(const std::string& productId);
+        double quantityOf(const std::string& productId) const;
+        // stock already taken by the paid order being edited (returned to stock on checkout)
+        double creditOf(const std::string& productId) const;
 
         const IProductRepository& products_;
         Order order_;
+        std::map<std::string, double> paidQty_;   // empty unless a paid order is loaded
     };
 
     // Hold and resume. One job: move a draft to and from "on hold".

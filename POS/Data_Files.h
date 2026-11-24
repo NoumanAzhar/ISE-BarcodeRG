@@ -29,14 +29,14 @@ namespace pos {
 	// One line of a data file = list of decoded fields.
 	using Record = std::vector<std::string>;
 
-	// Trims leading/trailing spaces; empty string -> "-".
+	// Trims spaces; inner spaces -> '_'; empty string -> "-".
 	std::string encodeField(const std::string& value);
 
-	// Reverse of encodeField: trims spaces; "-" -> "".
+	// Reverse of encodeField: '_' -> space; "-" -> "".
 	std::string decodeField(const std::string& token);
 
-	// One line -> fields. Trims trailing whitespace/'\r', removes the final '#'
-	// and the '|' before it, splits on '|', decodes each field.
+	// One line -> fields. Trims whitespace, drops the final '#', splits on spaces,
+	// decodes each field ('_' = space, "-" = empty).
 	Record splitRecord(const std::string& line);
 
 	std::string joinRecord(const Record& fields);
@@ -47,4 +47,4 @@ namespace pos {
 
 	bool appendRecord(const std::string& path, const Record& row);
 
-} // namespace pos
+} // namespace pos

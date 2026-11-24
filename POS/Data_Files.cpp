@@ -12,14 +12,16 @@ namespace pos {
 	}
 	string trimSpaces(const string& value)
 	{
-		int start = 0;
+		size_t start = 0;
 		while (start < value.length() && isSpaceChar(value[start]))
 			start++;
-		int end = value.length();
+		size_t end = value.length();
 		while (end > start && isSpaceChar(value[end - 1]))
 			end--;
 		return value.substr(start, end - start);
 	}
+	// A space inside a value is written as '_' so a line keeps a fixed number of
+	// space-separated fields. An empty value is written as "-".
 	std::string encodeField(const std::string& value)
 	{
 		string final = trimSpaces(value);
@@ -48,7 +50,7 @@ namespace pos {
 	{
 		Record rec;
 		string text = trimSpaces(line);
-		int at;
+		size_t at;
 		while ((at = text.find(' ')) != std::string::npos)
 		{
 			string part = text.substr(0, at);
@@ -107,4 +109,4 @@ namespace pos {
 		append << joinRecord(row) << endl;
 		return 1;
 	}
-} // namespace pos
+} // namespace pos

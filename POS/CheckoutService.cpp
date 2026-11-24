@@ -144,10 +144,39 @@ namespace pos {
         order.paymentMode = payment.mode;
         order.paymentMerchant = needsMerchant(payment.mode) ? payment.merchant : "";
 
-        // 7. save order, then bill (new, or replaced under the same id)
-        if (!orders_.save(order))
-            return fail(CheckoutStatus::OrderSaveFailed, "Could not save the order.");
+        // 7. stock first (old - new, a new order has old = 0): if anything fails here
+        //    the changes already made are undone and nothing has been saved yet.
+        set<string> ids;
+        for (const auto& e : oldQty)
+            ids.insert(e.first);
+        for (const auto& e : newQty)
+            ids.insert(e.first);
 
+        vector<pair<string, double>> applied;
+        auto undoStock = [&]() {
+            for (auto it = applied.rbegin(); it != applied.rend(); ++it)
+                inventory_.adjust(it->first, -it->second);
+        };
+        for (const string& id : ids) {
+            auto o = oldQty.find(id);
+            auto n = newQty.find(id);
+            const double delta = (o == oldQty.end() ? 0.0 : o->second) - (n == newQty.end() ? 0.0 : n->second);
+            if (fabs(delta) < kEpsilon)
+                continue;
+            if (!inventory_.adjust(id, delta)) {
+                undoStock();
+                return fail(CheckoutStatus::StockUpdateFailed, "Stock could not be updated for product " + id + ". Nothing was saved.");
+            }
+            applied.push_back({ id, delta });
+        }
+
+        // 8. save the order (new, or replaced under the same id)
+        if (!orders_.save(order)) {
+            undoStock();
+            return fail(CheckoutStatus::OrderSaveFailed, "Could not save the order.");
+        }
+
+        // 9. bill (new, or replaced under the same id)
         CheckoutResult result;
         result.orderId = order.id;
 
@@ -162,32 +191,7 @@ namespace pos {
         }
         catch (const exception& e) {
             result.status = CheckoutStatus::BillFailed;
-            result.message = "Order " + order.id + " was saved as paid, but the bill failed: " + e.what();
-            return result;
-        }
-
-        // 8. stock changes by the difference: old - new (a new order has old = 0)
-        set<string> ids;
-        for (const auto& e : oldQty) 
-            ids.insert(e.first);
-        for (const auto& e : newQty) 
-            ids.insert(e.first);
-
-        vector<string> failed;
-        for (const string& id : ids) {
-            auto o = oldQty.find(id);
-            auto n = newQty.find(id);
-            const double delta = (o == oldQty.end() ? 0.0 : o->second) - (n == newQty.end() ? 0.0 : n->second);
-            if (fabs(delta) < kEpsilon) 
-                continue;
-            if (!inventory_.adjust(id, delta)) 
-                failed.push_back(id);
-        }
-        if (!failed.empty()) {
-            string names;
-            for (const string& id : failed) names += (names.empty() ? "" : ", ") + id;
-            result.status = CheckoutStatus::StockUpdateFailed;
-            result.message = "Bill generated, but stock was not updated for product(s): " + names;
+            result.message = "Order " + order.id + " was saved as paid and stock was updated, but the bill failed: " + e.what();
             return result;
         }
         result.message = string("Order ") + order.id + (isEdit ? " updated. Bill " : " paid. Bill ")
@@ -195,4 +199,4 @@ namespace pos {
         return result;
     }
 
-} // namespace pos
+} // namespace pos

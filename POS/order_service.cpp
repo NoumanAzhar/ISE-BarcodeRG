@@ -37,6 +37,7 @@ namespace pos {
 
     void OrderService::start(const string& customerName, const string& contact) {
         order_ = Order{};
+        paidQty_.clear();
         order_.customerName = customerName;
         order_.customerContact = contact;
         order_.status = OrderStatus::InProgress;
@@ -56,6 +57,11 @@ namespace pos {
         return 0;
     }
 
+    double OrderService::creditOf(const string& productId) const {
+        auto it = paidQty_.find(productId);
+        return it == paidQty_.end() ? 0.0 : it->second;
+    }
+
     AddResult OrderService::addByBarcode(const string& barcode, double quantity) {
         ProductCatalog catalog(products_);
         auto product = catalog.lookup(barcode);
@@ -66,7 +72,7 @@ namespace pos {
             return { AddStatus::InvalidQuantity, *product, already };
 
         const double total = already + quantity;
-        if (!fitsStock(total, product->availableQty))
+        if (!fitsStock(total, product->availableQty + creditOf(product->id)))
             return { AddStatus::InsufficientStock, *product, already };
 
         auto it = findItem(product->id);
@@ -80,7 +86,7 @@ namespace pos {
         if (it == order_.items.end()) return false;
         auto product = products_.findById(productId);
         if (!product || !validQuantity(*product, quantity) ||
-            !fitsStock(quantity, product->availableQty))
+            !fitsStock(quantity, product->availableQty + creditOf(productId)))
             return false;                                                 // order left unchanged
         it->quantity = quantity;
         return true;
@@ -100,6 +106,9 @@ namespace pos {
     bool OrderService::load(const Order& order) {
         if (order.status == OrderStatus::Archived) return false;
         order_ = order;
+        paidQty_.clear();
+        if (order.status == OrderStatus::Paid)
+            for (const OrderItem& i : order.items) paidQty_[i.productId] += i.quantity;
         return true;
     }
 
