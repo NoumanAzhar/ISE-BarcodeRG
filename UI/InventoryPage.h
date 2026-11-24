@@ -4,6 +4,8 @@
 
 #include "Inventory.h"
 
+#include <QPixmap>
+
 #include <vector>
 
 namespace pos { class AppServices; }
@@ -13,26 +15,33 @@ class DataTable;
 class NeuButton;
 class NeuLineEdit;
 class NeuSegmented;
+class ProductDetailsView;
 class QLabel;
+class QStackedWidget;
 class QWidget;
 
-// Manager: stock of every product, with set / add stock.
 class InventoryPage : public PageBase {
     Q_OBJECT
 public:
     explicit InventoryPage(pos::AppServices& services, QWidget* parent = nullptr);
 
-    void onActivated() override;       // stock changes after every sale
+    void onActivated() override;
     void resetState() override;
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     QWidget* buildListSide();
-    QWidget* buildEditor();
+    QWidget* buildDetailsCard();
 
     void reload();
     void applyFilter();
     void showSelected();
-    void apply(bool addToStock);
+    void showBarcodeImage();
+    void addProduct();
+    void editSelected();
+    void assignBarcodes();
     const pos::InventoryRow* selectedRow() const;
 
     pos::AppServices& m_services;
@@ -40,16 +49,13 @@ private:
 
     NeuLineEdit* m_search = nullptr;
     NeuSegmented* m_filter = nullptr;
+    NeuButton* m_addBtn = nullptr;
     DataTable* m_table = nullptr;
 
-    QLabel* m_placeholder = nullptr;
-    QWidget* m_editor = nullptr;
-    QLabel* m_name = nullptr;
-    QLabel* m_sub = nullptr;
-    QLabel* m_stock = nullptr;
-    QLabel* m_stockNote = nullptr;
-    NeuLineEdit* m_amount = nullptr;
-    NeuButton* m_setBtn = nullptr;
-    NeuButton* m_addBtn = nullptr;
+    ProductDetailsView* m_details = nullptr;
+    QStackedWidget* m_imageStack = nullptr;
+    QLabel* m_image = nullptr;
     Banner* m_banner = nullptr;
+    NeuButton* m_editBtn = nullptr;
+    QPixmap m_barcodePixmap;
 };
