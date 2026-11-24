@@ -1,5 +1,5 @@
 0001 142969 LAYS Lays_Classic count 50.00 10.00 0.00 97 data/barcodes/142969.png 14 #
-0002 430300 COCOMO Cocomo count 10.00 1.00 0.00 1699 data/barcodes/430300.png 43 #
+0002 430300 COCOMO Cocomo count 10.00 1.00 0.00 169 data/barcodes/430300.png 43 #
 0003 379836 7UPDIET Diet_7up_1.5L count 150.00 15.00 5.00 57 data/barcodes/379836.png 37 #
 0004 401048 KITKAT KitKat_2_Finger count 70.00 7.00 0.00 78 data/barcodes/401048.png 40 #
 0005 693999 SUGAR Sugar_(per_kg) weight 180.00 18.00 0.00 59.5 data/barcodes/693999.png 69 #

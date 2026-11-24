@@ -4,21 +4,26 @@
 #include "DataTable.h"
 #include "Format.h"
 #include "Neu.h"
+#include "ProductDetailsView.h"
+#include "ProductEditDialog.h"
 #include "Widgets.h"
+#include "access.h"
+#include "barcode_assign.h"
 
+#include <QEvent>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QLocale>
-#include <QRegularExpression>
-#include <QRegularExpressionValidator>
+#include <QStackedWidget>
 #include <QVBoxLayout>
 
 #include <algorithm>
-#include <cmath>
 
 namespace {
 
 enum Filter { ShowAll, ShowOutOfStock };
+
+constexpr int kNoticeMs = 5000;
 
 bool matches(const pos::InventoryRow& row, const QString& needle)
 {
@@ -27,21 +32,19 @@ bool matches(const pos::InventoryRow& row, const QString& needle)
         || qs(row.categoryName).toLower().contains(needle);
 }
 
-} // namespace
+}
 
 InventoryPage::InventoryPage(pos::AppServices& services, QWidget* parent)
     : PageBase(parent), m_services(services)
 {
     auto* root = new QHBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
-    root->setSpacing(2);                         // cards already hold their shadow room
+    root->setSpacing(2);
     root->addWidget(buildListSide(), 3);
-    root->addWidget(buildEditor(), 2);
+    root->addWidget(buildDetailsCard(), 2);
 
     showSelected();
 }
-
-// ---------------------------------------------------------------- building
 
 QWidget* InventoryPage::buildListSide()
 {
@@ -54,11 +57,13 @@ QWidget* InventoryPage::buildListSide()
     m_search->setPlaceholderText("Search product or category");
     m_filter = new NeuSegmented(QStringList{ "All", "Out of stock" }, side);
     m_filter->setMinimumWidth(260);
+    m_addBtn = new NeuButton("Add Product", NeuButton::Variant::Primary, side);
 
     auto* top = new QHBoxLayout;
     top->setSpacing(2);
     top->addWidget(m_search, 1);
     top->addWidget(m_filter);
+    top->addWidget(m_addBtn);
 
     m_table = new DataTable(side);
     m_table->setColumns({
@@ -74,79 +79,70 @@ QWidget* InventoryPage::buildListSide()
     connect(m_search, &QLineEdit::textChanged, this, &InventoryPage::applyFilter);
     connect(m_filter, &NeuSegmented::currentChanged, this, &InventoryPage::applyFilter);
     connect(m_table, &DataTable::selectionChanged, this, &InventoryPage::showSelected);
+    connect(m_table, &DataTable::activated, this, &InventoryPage::editSelected);
+    connect(m_addBtn, &NeuButton::clicked, this, &InventoryPage::addProduct);
     return side;
 }
 
-QWidget* InventoryPage::buildEditor()
+QWidget* InventoryPage::buildDetailsCard()
 {
     NeuFrame* card = makeCard();
     auto* layout = new QVBoxLayout(card);
     layout->setContentsMargins(20, 18, 20, 18);
-    layout->setSpacing(6);
+    layout->setSpacing(10);
 
-    m_placeholder = makeLabel("Select a product to update its stock.", "muted", card);
-    m_placeholder->setAlignment(Qt::AlignCenter);
-    m_placeholder->setWordWrap(true);
+    m_details = new ProductDetailsView(card);
 
-    // ---- shown once a product is selected
-    m_editor = new QWidget(card);
-    auto* editor = new QVBoxLayout(m_editor);
-    editor->setContentsMargins(0, 0, 0, 0);
-    editor->setSpacing(4);
+    auto* paper = new QFrame(card);
+    paper->setObjectName("paper");
+    paper->setStyleSheet("QFrame#paper { background: #ffffff; border-radius: 14px; }");
+    auto* paperLayout = new QVBoxLayout(paper);
+    paperLayout->setContentsMargins(14, 12, 14, 12);
 
-    m_name = makeLabel(QString(), "cardTitle", m_editor);
-    m_name->setWordWrap(true);
-    m_sub = makeLabel(QString(), "muted", m_editor);
-    m_stock = makeLabel(QString(), "totalValue", m_editor);
-    m_stockNote = makeLabel("Out of stock", "hint", m_editor);
-    m_stockNote->setProperty("state", "invalid");
+    m_image = new QLabel(paper);
+    m_image->setAlignment(Qt::AlignCenter);
+    m_image->setMinimumSize(200, 90);
+    m_image->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    m_image->installEventFilter(this);
+    paperLayout->addWidget(m_image);
 
-    m_amount = new NeuLineEdit(m_editor);
-    m_amount->setPlaceholderText("Amount");
-    m_amount->setValidator(new QRegularExpressionValidator(
-        QRegularExpression("[0-9]{0,7}([.][0-9]{0,3})?"), m_amount));
+    auto* noImage = makeLabel("No barcode image", "muted", card);
+    noImage->setAlignment(Qt::AlignCenter);
+    noImage->setMinimumHeight(114);
 
-    auto* hint = makeLabel("Add stock adds the amount to what is on the shelf. "
-                           "Set quantity replaces the stock, for example after counting it.",
-                           "muted", m_editor);
-    hint->setWordWrap(true);
+    m_imageStack = new QStackedWidget(card);
+    m_imageStack->addWidget(paper);
+    m_imageStack->addWidget(noImage);
 
-    m_banner = new Banner(m_editor);
+    m_banner = new Banner(card);
 
-    m_setBtn = new NeuButton("Set quantity", NeuButton::Variant::Normal, m_editor);
-    m_addBtn = new NeuButton("Add stock", NeuButton::Variant::Primary, m_editor);
-    m_addBtn->setDefault(true);
+    m_editBtn = new NeuButton("Edit Product", NeuButton::Variant::Normal, card);
+    m_editBtn->setEnabled(false);
+    connect(m_editBtn, &NeuButton::clicked, this, &InventoryPage::editSelected);
+
+    auto* assignBtn = new NeuButton("Assign barcodes", NeuButton::Variant::Primary, card);
+    assignBtn->setToolTip("Creates a barcode for every product that does not have one yet.");
+    assignBtn->setVisible(pos::isAllowed(pos::Role::Manager, pos::Action::GenerateBarcode));
+    connect(assignBtn, &NeuButton::clicked, this, &InventoryPage::assignBarcodes);
+
     auto* buttons = new QHBoxLayout;
-    buttons->setSpacing(2);
-    buttons->addWidget(m_setBtn);
-    buttons->addStretch(1);
-    buttons->addWidget(m_addBtn);
+    buttons->setSpacing(8);
+    buttons->addWidget(m_editBtn, 1);
+    buttons->addWidget(assignBtn, 1);
 
-    editor->addWidget(makeLabel("PRODUCT", "sectionTitle", m_editor));
-    editor->addWidget(m_name);
-    editor->addWidget(m_sub);
-    editor->addSpacing(10);
-    editor->addWidget(makeLabel("IN STOCK", "sectionTitle", m_editor));
-    editor->addWidget(m_stock);
-    editor->addWidget(m_stockNote);
-    editor->addSpacing(10);
-    editor->addWidget(makeField("Amount", m_amount, m_editor));
-    editor->addWidget(hint);
-    editor->addStretch(1);
-    editor->addWidget(m_banner);
-    editor->addLayout(buttons);
-
-    layout->addWidget(m_placeholder, 1);
-    layout->addWidget(m_editor, 1);
-
-    connect(m_amount, &QLineEdit::textChanged, this, [this]() { m_amount->setState(QString()); });
-    connect(m_amount, &QLineEdit::returnPressed, this, [this]() { apply(true); });
-    connect(m_addBtn, &NeuButton::clicked, this, [this]() { apply(true); });
-    connect(m_setBtn, &NeuButton::clicked, this, [this]() { apply(false); });
+    layout->addWidget(m_details, 1);
+    layout->addWidget(m_imageStack);
+    layout->addWidget(m_banner);
+    layout->addLayout(buttons);
     return card;
 }
 
-// ------------------------------------------------------------- page hooks
+bool InventoryPage::eventFilter(QObject* watched, QEvent* event)
+{
+    if (watched == m_image && event->type() == QEvent::Resize)
+        showBarcodeImage();
+    return PageBase::eventFilter(watched, event);
+}
 
 void InventoryPage::onActivated()
 {
@@ -161,11 +157,9 @@ void InventoryPage::resetState()
     m_banner->clearMessage();
 }
 
-// -------------------------------------------------------------------- list
-
 void InventoryPage::reload()
 {
-    m_rows = m_services.inventory().list();      // sorted by name
+    m_rows = m_services.inventory().list();
     applyFilter();
 }
 
@@ -192,7 +186,7 @@ void InventoryPage::applyFilter()
         if (row.categoryName.empty())
             m_table->setTone(at, 2, DataTable::Tone::Muted);
     }
-    m_table->selectKey(keep);                    // refreshes the editor
+    m_table->selectKey(keep);
 }
 
 const pos::InventoryRow* InventoryPage::selectedRow() const
@@ -203,63 +197,74 @@ const pos::InventoryRow* InventoryPage::selectedRow() const
     return (id.empty() || it == m_rows.end()) ? nullptr : &*it;
 }
 
-// ------------------------------------------------------------------ editor
-
 void InventoryPage::showSelected()
 {
     const pos::InventoryRow* row = selectedRow();
-    m_placeholder->setVisible(row == nullptr);
-    m_editor->setVisible(row != nullptr);
-    if (!row)
-        return;
+    const auto product = row ? m_services.products().findById(row->productId) : std::nullopt;
 
-    m_name->setText(qs(row->name));
-    const QString category = row->categoryName.empty() ? QStringLiteral("No category")
-                                                       : qs(row->categoryName);
-    const QString dot = QStringLiteral("  ") + QString(kMiddleDot) + QStringLiteral("  ");
-    m_sub->setText(qs(row->acronym) + dot + QStringLiteral("sold by ") + unitName(row->unit) + dot + category);
-    m_stock->setText(formatQty(row->quantity, row->unit));
-    m_stockNote->setVisible(row->quantity <= 0);
-    m_amount->clear();
+    m_editBtn->setEnabled(product.has_value());
+    if (!product) {
+        m_details->showMessage("Select a product");
+        m_barcodePixmap = QPixmap();
+    } else {
+        m_details->showProduct(*product, qs(row->categoryName));
+        m_barcodePixmap = QPixmap(qs(product->barcodeFile));
+    }
+    showBarcodeImage();
 }
 
-void InventoryPage::apply(bool addToStock)
+void InventoryPage::showBarcodeImage()
+{
+    const bool has = !m_barcodePixmap.isNull();
+    m_imageStack->setCurrentIndex(has ? 0 : 1);
+    if (has)
+        m_image->setPixmap(fitPixmap(m_barcodePixmap, m_image->size()));
+}
+
+void InventoryPage::addProduct()
+{
+    ProductEditDialog dialog(m_services, std::nullopt, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    reload();
+    m_table->selectKey(qs(dialog.savedProductId()));
+    if (!dialog.savedNotice().isEmpty())
+        m_banner->showMessage(dialog.savedNotice(), Banner::Warning, kNoticeMs);
+    else
+        m_banner->showMessage("Product added.", Banner::Success);
+}
+
+void InventoryPage::editSelected()
 {
     const pos::InventoryRow* row = selectedRow();
     if (!row)
         return;
-
-    bool ok = false;
-    const double amount = QLocale::c().toDouble(m_amount->text().trimmed(), &ok);
-    const bool whole = row->unit != pos::MeasureUnit::Weight;
-    QString problem;
-    if (!ok)
-        problem = "Type the amount first.";
-    else if (addToStock && amount <= 0)
-        problem = "The amount to add must be more than 0.";
-    else if (!addToStock && amount < 0)
-        problem = "The quantity cannot be negative.";
-    else if (whole && std::floor(amount) != amount)
-        problem = "This product is sold by count, so use a whole number.";
-    if (!problem.isEmpty()) {
-        m_amount->setState("invalid");
-        m_amount->setFocus();
-        m_banner->showMessage(problem, Banner::Error, 3500);
+    const auto product = m_services.products().findById(row->productId);
+    if (!product)
         return;
-    }
 
-    const std::string id = row->productId;
-    const bool saved = addToStock ? m_services.inventory().addStock(id, amount)
-                                  : m_services.inventory().setQuantity(id, amount);
-    if (!saved) {
-        m_banner->showMessage("The stock could not be saved.", Banner::Error, 3500);
+    const QString id = qs(row->productId);
+    ProductEditDialog dialog(m_services, *product, this);
+    if (dialog.exec() != QDialog::Accepted)
         return;
-    }
 
-    reload();                                    // keeps the product selected
-    const pos::InventoryRow* now = selectedRow();
-    const QString total = now ? formatQty(now->quantity, now->unit) : QString();
-    m_banner->showMessage(addToStock ? QStringLiteral("Added. Stock is now %1.").arg(total)
-                                     : QStringLiteral("Stock set to %1.").arg(total),
-                          Banner::Success);
+    reload();
+    m_table->selectKey(id);
+    m_banner->showMessage("Changes saved.", Banner::Success);
+}
+
+void InventoryPage::assignBarcodes()
+{
+    const pos::AssignReport report = m_services.assigner().assignAll();
+    reload();
+
+    if (report.failed > 0) {
+        const QString first = report.messages.empty() ? QString("Some barcodes could not be assigned")
+                                                      : qs(report.messages.front());
+        m_banner->showMessage(first, Banner::Warning, kNoticeMs);
+    } else {
+        m_banner->showMessage(QString("%1 assigned, %2 kept").arg(report.assigned).arg(report.kept),
+                              Banner::Success);
+    }
 }
