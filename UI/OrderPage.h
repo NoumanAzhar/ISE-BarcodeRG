@@ -18,6 +18,8 @@ class QLabel;
 class OrderPage : public PageBase {
     Q_OBJECT
 public:
+    static constexpr const char* kTitle = "New Order";   // the rail item that shows this page
+
     OrderPage(pos::AppServices& services, QWidget* parent = nullptr);
 
     bool canLeave() override;
@@ -36,6 +38,9 @@ private:
     void onCameraScanned(const QString& digits);
     void showDescription();
     void clearItems();
+    void holdOrder();
+    void showHoldList();
+    void syncMode();                // title, buttons and fields follow the draft (new, resumed, edited)
     void generateBill();
     void resetFields();
     void refreshAll();
@@ -50,6 +55,14 @@ private:
     NeuLineEdit* m_code = nullptr;
 
     // right card
+    QLabel* m_title = nullptr;
+    NeuButton* m_holdListBtn = nullptr;
+    NeuButton* m_holdBtn = nullptr;
+    NeuButton* m_billBtn = nullptr;
+    NeuButton* m_clearBtn = nullptr;
+    QLabel* m_seasonKey = nullptr;
+    QLabel* m_season = nullptr;
+    QString m_shownOrderId;         // the draft whose customer was last copied into the fields
     NeuLineEdit* m_name = nullptr;
     NeuLineEdit* m_contact = nullptr;
     OrderItemList* m_list = nullptr;

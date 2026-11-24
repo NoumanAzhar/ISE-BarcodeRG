@@ -6,7 +6,9 @@
 #include "Format.h"
 #include "Neu.h"
 #include "OrderItemList.h"
+#include "HoldListDialog.h"
 #include "OrderTotals.h"
+#include "PosActions.h"
 #include "ProductDialog.h"
 #include "Widgets.h"
 #include "order.h"
@@ -83,6 +85,8 @@ OrderPage::OrderPage(pos::AppServices& services, QWidget* parent)
         auto* shortcut = new QShortcut(keys, this);
         connect(shortcut, &QShortcut::activated, this, &OrderPage::generateBill);
     }
+    auto* holdShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_H), this);   // hold with one key press
+    connect(holdShortcut, &QShortcut::activated, this, [this]() { if (isVisible()) holdOrder(); });
 
     refreshAll();
 }
@@ -132,7 +136,7 @@ QWidget* OrderPage::buildOrderCard()
 
     // customer
     m_name = new NeuLineEdit(card);
-    m_name->setPlaceholderText("Customer name");
+    m_name->setPlaceholderText("Customer name (optional)");
     m_contact = new NeuLineEdit(card);
     m_contact->setPlaceholderText("Contact (03XXXXXXXXX)");
     m_contact->setMaxLength(11);
@@ -161,11 +165,16 @@ QWidget* OrderPage::buildOrderCard()
     auto* sums = new QGridLayout;
     sums->setHorizontalSpacing(16);
     sums->setVerticalSpacing(2);
-    const QPair<const char*, QLabel*> sumRows[] = {
-        { "Subtotal", m_subtotal }, { "Tax", m_tax }, { "Discount", m_discount } };
+    m_season = makeLabel(QString(), "mono", card);
+    m_seasonKey = makeLabel("Season offer", "muted", card);
+    const QPair<QLabel*, QLabel*> sumRows[] = {
+        { makeLabel("Subtotal", "muted", card), m_subtotal },
+        { makeLabel("Tax", "muted", card), m_tax },
+        { makeLabel("Discount", "muted", card), m_discount },
+        { m_seasonKey, m_season } };
     int row = 0;
     for (const auto& r : sumRows) {
-        sums->addWidget(makeLabel(r.first, "muted", card), row, 0);
+        sums->addWidget(r.first, row, 0);
         r.second->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         sums->addWidget(r.second, row, 1);
         ++row;
@@ -186,16 +195,29 @@ QWidget* OrderPage::buildOrderCard()
     // actions
     m_descriptionBtn = new NeuButton("Description", NeuButton::Variant::Normal, card);
     m_descriptionBtn->setEnabled(false);
-    auto* clearBtn = new NeuButton("Clear", NeuButton::Variant::Normal, card);
-    auto* billBtn = new NeuButton("Generate Bill", NeuButton::Variant::Primary, card);
+    m_clearBtn = new NeuButton("Clear", NeuButton::Variant::Normal, card);
+    m_holdBtn = new NeuButton("Hold", NeuButton::Variant::Normal, card);
+    m_holdBtn->setToolTip("Put this order on hold (Ctrl+H)");
+    m_billBtn = new NeuButton("Generate Bill", NeuButton::Variant::Primary, card);
 
     auto* actions = new QHBoxLayout;
     actions->setSpacing(2);
     actions->addWidget(m_descriptionBtn);
-    actions->addWidget(clearBtn);
+    actions->addWidget(m_clearBtn);
     actions->addStretch(1);
-    actions->addWidget(billBtn);
+    actions->addWidget(m_holdBtn);
+    actions->addWidget(m_billBtn);
 
+    m_title = makeLabel("NEW ORDER", "sectionTitle", card);
+    m_holdListBtn = new NeuButton("On hold", NeuButton::Variant::Normal, card);
+    m_holdListBtn->setToolTip("Orders you put on hold");
+    m_holdListBtn->hide();
+    auto* header = new QHBoxLayout;
+    header->addWidget(m_title);
+    header->addStretch(1);
+    header->addWidget(m_holdListBtn);
+
+    layout->addLayout(header);
     layout->addLayout(customer);
     layout->addWidget(m_list, 1);
     layout->addLayout(totals);
@@ -208,8 +230,10 @@ QWidget* OrderPage::buildOrderCard()
     connect(m_list, &OrderItemList::notice, this,
             [this](const QString& text) { m_banner->showMessage(text, Banner::Warning); });
     connect(m_descriptionBtn, &NeuButton::clicked, this, &OrderPage::showDescription);
-    connect(clearBtn, &NeuButton::clicked, this, &OrderPage::clearItems);
-    connect(billBtn, &NeuButton::clicked, this, &OrderPage::generateBill);
+    connect(m_clearBtn, &NeuButton::clicked, this, &OrderPage::clearItems);
+    connect(m_holdBtn, &NeuButton::clicked, this, &OrderPage::holdOrder);
+    connect(m_holdListBtn, &NeuButton::clicked, this, &OrderPage::showHoldList);
+    connect(m_billBtn, &NeuButton::clicked, this, &OrderPage::generateBill);
     return card;
 }
 
@@ -259,19 +283,32 @@ bool OrderPage::canLeave()
     if (m_services.order().current().items.empty())
         return true;
 
+    const bool editing = PosActions::isEditingPaid(m_services);
+
     QMessageBox box(this);
     box.setIcon(QMessageBox::Question);
-    box.setWindowTitle("Unfinished order");
-    box.setText("This order has items that are not billed yet.");
-    QPushButton* keep = box.addButton("Keep order", QMessageBox::RejectRole);
-    QPushButton* discard = box.addButton("Discard order", QMessageBox::DestructiveRole);
-    box.setDefaultButton(keep);
+    box.setWindowTitle(editing ? "Unsaved changes" : "Unfinished order");
+    box.setText(editing ? "You have changes to this order that are not saved."
+                        : "This order has items that are not billed yet.");
+    QPushButton* keep = box.addButton(editing ? "Keep editing" : "Keep order", QMessageBox::RejectRole);
+    QPushButton* hold = editing ? nullptr : box.addButton("Put on hold", QMessageBox::AcceptRole);
+    QPushButton* discard = box.addButton(editing ? "Discard changes" : "Discard order", QMessageBox::DestructiveRole);
+    box.setDefaultButton(hold ? hold : keep);
     box.exec();
 
+    if (hold && box.clickedButton() == hold) {
+        const PosActions::Result held = PosActions::holdDraft(m_services, m_name->text().trimmed(),
+                                                              m_contact->text().trimmed());
+        if (!held.ok)
+            return false;
+        resetFields();
+        refreshAll();
+        return true;
+    }
     if (box.clickedButton() != discard)
         return false;
 
-    m_services.order().clear();
+    m_services.order().start("");                // also leaves edit mode
     resetFields();
     refreshAll();
     return true;
@@ -333,8 +370,42 @@ void OrderPage::showDescription()
 
 void OrderPage::clearItems()
 {
-    m_services.order().clear();
+    if (PosActions::isEditingPaid(m_services)) {
+        m_services.order().start("");            // drop the changes; the saved order stays as it was
+        resetFields();
+    } else {
+        m_services.order().clear();
+    }
     refreshAll();
+}
+
+void OrderPage::holdOrder()
+{
+    const PosActions::Result result = PosActions::holdDraft(m_services, m_name->text().trimmed(),
+                                                            m_contact->text().trimmed());
+    if (!result.ok) {
+        m_banner->showMessage(result.message, Banner::Error);
+        return;
+    }
+    resetFields();
+    refreshAll();
+    m_banner->showMessage(result.message, Banner::Success, kLongMessageMs);
+}
+
+void OrderPage::showHoldList()
+{
+    HoldListDialog dialog(m_services, this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const PosActions::Result result = PosActions::resumeHeld(m_services, dialog.chosenOrderId());
+    if (!result.ok) {
+        m_banner->showMessage(result.message, Banner::Error, kLongMessageMs);
+        return;
+    }
+    resetFields();
+    refreshAll();                                // syncMode() copies the customer of the opened order
+    m_banner->showMessage(result.message, Banner::Success, kLongMessageMs);
 }
 
 void OrderPage::generateBill()
@@ -347,13 +418,8 @@ void OrderPage::generateBill()
         return;
     }
 
-    const QString name = m_name->text().trimmed();
-    if (name.isEmpty()) {
-        m_name->setState("invalid");
-        m_name->setFocus();
-        m_banner->showMessage("Enter the customer name", Banner::Error);
-        return;
-    }
+    const QString typedName = m_name->text().trimmed();
+    const QString name = typedName.isEmpty() ? PosActions::kWalkIn : typedName;   // no typing needed
 
     const QString contact = m_contact->text().trimmed();
     if (!contact.isEmpty() && !isValidContact(contact)) {   // contact is optional
@@ -410,14 +476,59 @@ void OrderPage::refreshAll()
 {
     m_list->refresh();
     updateTotals();
+    syncMode();
+}
+
+void OrderPage::syncMode()
+{
+    const pos::Order& order = m_services.order().current();
+    const bool opened = !order.id.empty();                       // resumed or edited
+    const bool editing = PosActions::isEditingPaid(m_services);
+    const QString id = qs(order.id);
+
+    // An opened order brings its customer along; a fresh draft starts with empty fields.
+    if (id != m_shownOrderId) {
+        m_shownOrderId = id;
+        if (opened) {
+            const QString name = qs(order.customerName);
+            m_name->setText(name == PosActions::kWalkIn ? QString() : name);
+            m_contact->setText(qs(order.customerContact));
+        }
+    }
+
+    QString title = "NEW ORDER";
+    if (editing)
+        title = "EDITING ORDER " + id;
+    else if (opened)
+        title = "ORDER " + id + " (RESUMED)";
+    m_title->setText(title);
+    m_title->setObjectName(opened ? "cardLink" : "sectionTitle");   // accent while an order is open
+    repolish(m_title);
+
+    m_billBtn->setText(editing ? "Save changes" : "Generate Bill");
+    m_clearBtn->setText(editing ? "Discard changes" : "Clear");
+    m_holdBtn->setVisible(!editing);                              // a paid order cannot go on hold
+
+    const int held = int(m_services.hold().list().size());
+    m_holdListBtn->setText(QString("On hold (%1)").arg(held));
+    m_holdListBtn->setVisible(held > 0 && !editing);
 }
 
 void OrderPage::updateTotals()
 {
+    const double season = PosActions::seasonPercentToday(m_services);
     const pos::OrderTotals totals =
-        pos::computeTotals(m_services.order().current(), m_services.products());
+        pos::computeTotals(m_services.order().current(), m_services.products(), season);
     m_subtotal->setText(formatPkr(totals.withoutTax));
     m_tax->setText(formatPkr(totals.tax));
     m_discount->setText(formatPkr(totals.discount));
     m_payable->setText(formatPkr(totals.payable));
+
+    const bool offer = totals.seasonalDiscount > 0;              // a season offer is running
+    m_seasonKey->setVisible(offer);
+    m_season->setVisible(offer);
+    if (offer) {
+        m_seasonKey->setText(QString("Season offer (%1%)").arg(QString::number(season, 'g', 4)));
+        m_season->setText("-" + formatPkr(totals.seasonalDiscount));
+    }
 }

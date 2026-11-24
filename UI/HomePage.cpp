@@ -28,9 +28,9 @@ HomePage::HomePage(QWidget* parent)
 
     // ---- the two roles ----
     auto* cashierCard = new ActionCard(IconWidget::Cashier, "Cashier",
-                                       "Scan items and take payment", this);
+                                       "Scan, hold and bill orders", this);
     auto* managerCard = new ActionCard(IconWidget::Manager, "Manager",
-                                       "Barcodes and products", this);
+                                       "Products, stock, discounts and reports", this);
 
     for (ActionCard* card : { cashierCard, managerCard }) {
         card->setMinimumSize(320, 250);

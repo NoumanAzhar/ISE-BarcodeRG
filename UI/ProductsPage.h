@@ -4,6 +4,7 @@
 
 #include "Product.h"
 
+#include <QHash>
 #include <QPixmap>
 #include <QString>
 
@@ -47,12 +48,14 @@ private:
     QString selectedId() const;
     void showSelected();
     void showBarcodeImage();
+    QString categoryName(const std::string& categoryId) const;   // empty when it has none
     void assignBarcodes();
     void addProduct();
     void editSelected();
 
     pos::AppServices& m_services;
     std::vector<pos::Product> m_products;
+    QHash<QString, QString> m_categoryNames;       // category id -> name
 
     NeuLineEdit* m_search = nullptr;
     NeuButton* m_addBtn = nullptr;

@@ -4,37 +4,31 @@
 #include "Format.h"
 #include "Neu.h"
 #include "Widgets.h"
-#include "code128.h"
-#include "barcode_render.h"
+#include "barcode_assign.h"
+#include "Category.h"
 
-#include <QGridLayout>
+#include <QComboBox>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QVBoxLayout>
 
-#include <filesystem>
-#include <system_error>
-#include <random>
-#include <set>
+#include <algorithm>
 
 namespace {
-// Heavy, slightly rounded text for the "Product Name" and "Barcode" captions (Add mode).
-// Tries the heavy rounded fonts first, then Segoe UI Black, then plain bold.
-const char* const kStrongLabelStyle =
-    "font-family: 'Arial Rounded MT Bold', 'Nunito Black', 'Nunito', 'Varela Round', "
-    "'Segoe UI Black', 'Segoe UI'; font-weight: 900; font-size: 16px;";
 
-QLabel* makeCaption(const QString& text, bool strong, QWidget* parent)
+// Two inputs side by side with their captions.
+QHBoxLayout* makeRow(QWidget* left, QWidget* right)
 {
-    QLabel* label = makeLabel(text, "fieldLabel", parent);
-    if (strong)
-        label->setStyleSheet(kStrongLabelStyle);
-    return label;
+    auto* row = new QHBoxLayout;
+    row->setSpacing(12);
+    row->addWidget(left, 1);
+    row->addWidget(right, 1);
+    return row;
 }
-}
+
+} // namespace
 
 ProductEditDialog::ProductEditDialog(pos::AppServices& services,
                                      std::optional<pos::Product> product,
@@ -45,8 +39,8 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     if (editing)
         m_sold = m_services.orders().containsProduct(m_original->id);
 
-    setWindowTitle(editing ? "Edit Product" : "Add Product");
-    setMinimumWidth(480);
+    setWindowTitle(editing ? "Edit product" : "Add product");
+    setMinimumWidth(520);
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);
@@ -55,23 +49,18 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
     NeuFrame* card = makeCard();
     auto* cardLayout = new QVBoxLayout(card);
     cardLayout->setContentsMargins(20, 18, 20, 18);
-    cardLayout->setSpacing(10);
+    cardLayout->setSpacing(6);
 
-    if (!editing)
-        cardLayout->addWidget(makeLabel("Add New Product", "sectionTitle", card));
+    cardLayout->addWidget(makeLabel(editing ? "EDIT PRODUCT" : "NEW PRODUCT", "sectionTitle", card));
 
-    // Name
-    cardLayout->addWidget(makeCaption("Product Name", !editing, card));
+    // ---- name
     m_name = new NeuLineEdit(card);
-    cardLayout->addWidget(m_name);
+    m_name->setPlaceholderText("e.g. Lays Classic");
+    cardLayout->addWidget(makeField("Product name", m_name, card));
 
-    // Acronym & Unit in a horizontal row
-    auto* row1 = new QHBoxLayout;
-    row1->setSpacing(12);
-
-    auto* colAcronym = new QVBoxLayout;
-    colAcronym->addWidget(makeLabel("Acronym", "fieldLabel", card));
+    // ---- acronym and category
     m_acronym = new NeuLineEdit(card);
+    m_acronym->setPlaceholderText("e.g. LAYS");
     m_acronym->setMaxLength(int(pos::kMaxAcronym));
     m_acronym->setValidator(new QRegularExpressionValidator(QRegularExpression("[A-Za-z0-9]*"), m_acronym));
     connect(m_acronym, &QLineEdit::textEdited, this, [this](const QString& text) {
@@ -79,75 +68,48 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
         m_acronym->setText(text.toUpper());          // acronyms are always upper case
         m_acronym->setCursorPosition(cursor);
     });
-    colAcronym->addWidget(m_acronym);
 
-    auto* colUnit = new QVBoxLayout;
-    colUnit->addWidget(makeLabel("Measurement Unit", "fieldLabel", card));
+    m_category = new QComboBox(card);
+    m_category->setEditable(false);
+    m_category->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+    cardLayout->addLayout(makeRow(makeField("Acronym", m_acronym, card),
+                                  makeField("Category", m_category, card)));
+
+    // ---- unit and price
     m_unit = new NeuSegmented(QStringList{ "Count", "Weight" }, card);
-    colUnit->addWidget(m_unit);
-
-    row1->addLayout(colAcronym, 1);
-    row1->addLayout(colUnit, 1);
-    cardLayout->addLayout(row1);
-
-    // Price & Tax
-    auto* row2 = new QHBoxLayout;
-    row2->setSpacing(12);
-
-    auto* colPrice = new QVBoxLayout;
-    colPrice->addWidget(makeLabel("Unit Price (PKR)", "fieldLabel", card));
     m_price = new NeuLineEdit(card);
     m_price->setPlaceholderText("0.00");
-    colPrice->addWidget(m_price);
+    cardLayout->addLayout(makeRow(makeField("Measurement unit", m_unit, card),
+                                  makeField("Unit price (PKR)", m_price, card)));
 
-    auto* colTax = new QVBoxLayout;
-    colTax->addWidget(makeLabel("Tax (PKR)", "fieldLabel", card));
+    // ---- tax and discount
     m_tax = new NeuLineEdit(card);
     m_tax->setPlaceholderText("0.00");
-    colTax->addWidget(m_tax);
-
-    row2->addLayout(colPrice, 1);
-    row2->addLayout(colTax, 1);
-    cardLayout->addLayout(row2);
-
-    // Discount & Stock
-    auto* row3 = new QHBoxLayout;
-    row3->setSpacing(12);
-
-    auto* colDiscount = new QVBoxLayout;
-    colDiscount->addWidget(makeLabel("Discount per unit (PKR)", "fieldLabel", card));
     m_discount = new NeuLineEdit(card);
     m_discount->setPlaceholderText("0.00");
-    colDiscount->addWidget(m_discount);
+    cardLayout->addLayout(makeRow(makeField("Tax per unit (PKR)", m_tax, card),
+                                  makeField("Discount per unit (PKR)", m_discount, card)));
 
-    auto* colStock = new QVBoxLayout;
-    colStock->addWidget(makeLabel("Available Stock", "fieldLabel", card));
+    // ---- stock and barcode
     m_stock = new NeuLineEdit(card);
     m_stock->setPlaceholderText("0");
-    colStock->addWidget(m_stock);
-
-    row3->addLayout(colDiscount, 1);
-    row3->addLayout(colStock, 1);
-    cardLayout->addLayout(row3);
-
-    // Barcode + Random button
-    cardLayout->addWidget(makeLabel("Barcode", "fieldLabel", card));
-    auto* barRow = new QHBoxLayout;
-    barRow->setSpacing(8);
-    m_barcode = new NeuLineEdit(card);
-    if (editing)
-        m_barcode->setPlaceholderText("Not assigned (use Assign barcodes)");
-    m_barcode->setMaxLength(6);
-    m_barcode->setValidator(new QRegularExpressionValidator(QRegularExpression("[1-9][0-9]{0,5}"), m_barcode));
-    barRow->addWidget(m_barcode, 1);
-    if (!editing) {                      // the barcode of an existing product is never changed
-        m_randomBtn = new NeuButton("Random", NeuButton::Variant::Normal, card);
-        m_randomBtn->setToolTip("Generate an unused random 6-digit barcode");
-        barRow->addWidget(m_randomBtn);
+    if (editing) {
+        m_barcode = new NeuLineEdit(card);
+        m_barcode->setPlaceholderText("Not created yet");
+        cardLayout->addLayout(makeRow(makeField("Available stock", m_stock, card),
+                                      makeField("Barcode", m_barcode, card)));
+    } else {
+        cardLayout->addWidget(makeField("Available stock", m_stock, card));
+        auto* hint = makeLabel("The barcode is created for you when you save: it starts with the "
+                               "category ID, for example 10 gives 100001.", "muted", card);
+        hint->setWordWrap(true);
+        cardLayout->addSpacing(2);
+        cardLayout->addWidget(hint);
     }
-    cardLayout->addLayout(barRow);
 
-    // Locked fields (Edit mode): unit and barcode always, name and acronym once sold.
+    // ---- locked fields (Edit mode): unit and barcode always, name and acronym once sold,
+    //      category once the product has a barcode (the barcode starts with it).
     if (editing) {
         m_name->setLockIconVisible(false);
         m_acronym->setLockIconVisible(false);
@@ -164,42 +126,58 @@ ProductEditDialog::ProductEditDialog(pos::AppServices& services,
         m_unit->setToolTip("The measurement unit can't be changed.");
         m_barcode->setLocked(true);
         m_barcode->setToolTip("The barcode can't be changed.");
+        if (!m_original->barcode.empty()) {
+            m_category->setEnabled(false);
+            m_category->setToolTip("The category can't be changed: the barcode starts with its ID.");
+        }
     }
 
     m_banner = new Banner(card);
     cardLayout->addWidget(m_banner);
 
-    // Bottom action buttons
+    // ---- buttons
     auto* cancelBtn = new NeuButton("Cancel", NeuButton::Variant::Normal, this);
     cancelBtn->setAutoDefault(false);
-    auto* saveBtn = new NeuButton(editing ? "Save Changes" : "Add Product",
-                                  NeuButton::Variant::Primary, this);
-    saveBtn->setDefault(true);
+    m_saveBtn = new NeuButton(editing ? "Save changes" : "Add product", NeuButton::Variant::Primary, this);
+    m_saveBtn->setDefault(true);
 
     auto* buttons = new QHBoxLayout;
     buttons->setSpacing(8);
     buttons->addStretch(1);
     buttons->addWidget(cancelBtn);
-    buttons->addWidget(saveBtn);
+    buttons->addWidget(m_saveBtn);
 
     layout->addWidget(card);
     layout->addLayout(buttons);
 
-    // Connections to clear invalid states
-    connect(m_name, &QLineEdit::textChanged, this, [this]() { m_name->setState(""); });
-    connect(m_acronym, &QLineEdit::textChanged, this, [this]() { m_acronym->setState(""); });
-    connect(m_price, &QLineEdit::textChanged, this, [this]() { m_price->setState(""); });
-    connect(m_tax, &QLineEdit::textChanged, this, [this]() { m_tax->setState(""); });
-    connect(m_discount, &QLineEdit::textChanged, this, [this]() { m_discount->setState(""); });
-    connect(m_stock, &QLineEdit::textChanged, this, [this]() { m_stock->setState(""); });
-    connect(m_barcode, &QLineEdit::textChanged, this, [this]() { m_barcode->setState(""); });
+    // Clear a red ring as soon as the field is edited.
+    for (NeuLineEdit* edit : { m_name, m_acronym, m_price, m_tax, m_discount, m_stock })
+        connect(edit, &QLineEdit::textChanged, this, [edit]() { edit->setState(QString()); });
 
-    if (m_randomBtn)
-        connect(m_randomBtn, &NeuButton::clicked, this, &ProductEditDialog::generateRandomBarcode);
     connect(cancelBtn, &NeuButton::clicked, this, &QDialog::reject);
-    connect(saveBtn, &NeuButton::clicked, this, &ProductEditDialog::onSave);
+    connect(m_saveBtn, &NeuButton::clicked, this, &ProductEditDialog::onSave);
 
+    fillCategories();
     populateFields();
+}
+
+void ProductEditDialog::fillCategories()
+{
+    std::vector<pos::Category> categories = m_services.categories().all();
+    std::sort(categories.begin(), categories.end(),
+              [](const pos::Category& a, const pos::Category& b) { return a.id < b.id; });
+
+    for (const pos::Category& c : categories)
+        m_category->addItem(QString("%1  (%2)").arg(qs(c.name), qs(c.id)), qs(c.id));
+    m_category->setPlaceholderText("Select category");
+    m_category->setCurrentIndex(-1);
+
+    if (categories.empty()) {
+        m_category->setEnabled(false);
+        m_saveBtn->setEnabled(false);
+        m_banner->showMessage("There are no categories yet. Add one on the Categories page first.",
+                              Banner::Warning, 0);
+    }
 }
 
 void ProductEditDialog::populateFields()
@@ -213,6 +191,7 @@ void ProductEditDialog::populateFields()
         m_discount->setText(QString::number(m_original->discount, 'f', 2));
         m_stock->setText(QString::number(m_original->availableQty));
         m_barcode->setText(qs(m_original->barcode));
+        m_category->setCurrentIndex(m_category->findData(qs(m_original->categoryId)));
     } else {
         m_price->setText("0.00");
         m_tax->setText("0.00");
@@ -224,33 +203,8 @@ void ProductEditDialog::populateFields()
 void ProductEditDialog::clearErrors()
 {
     m_banner->clearMessage();
-    m_name->setState("");
-    m_acronym->setState("");
-    m_price->setState("");
-    m_tax->setState("");
-    m_discount->setState("");
-    m_stock->setState("");
-    m_barcode->setState("");
-}
-
-void ProductEditDialog::generateRandomBarcode()
-{
-    std::set<std::string> used;
-    for (const auto& p : m_services.products().all()) {
-        if (!p.barcode.empty())
-            used.insert(p.barcode);
-    }
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<int> dis(100000, 999999);
-    for (int attempts = 0; attempts < 10000; ++attempts) {
-        std::string candidate = std::to_string(dis(gen));
-        if (used.find(candidate) == used.end()) {
-            m_barcode->setText(qs(candidate));
-            m_barcode->setState("");
-            return;
-        }
-    }
+    for (NeuLineEdit* edit : { m_name, m_acronym, m_price, m_tax, m_discount, m_stock })
+        edit->setState(QString());
 }
 
 void ProductEditDialog::onSave()
@@ -270,7 +224,7 @@ void ProductEditDialog::onSave()
         if (name.isEmpty()) {
             m_name->setState("invalid");
             m_name->setFocus();
-            m_banner->showMessage("Enter the product name", Banner::Error);
+            m_banner->showMessage("Enter the product name.", Banner::Error);
             return;
         }
 
@@ -279,16 +233,16 @@ void ProductEditDialog::onSave()
         if (acronymChanged) {
             QString problem;
             if (acronym.isEmpty())
-                problem = "Enter a product acronym (e.g. LAYS)";
+                problem = "Enter a product acronym (for example LAYS).";
             else if (acronym.length() < int(pos::kMinAcronym))
-                problem = QString("Acronym must be at least %1 characters").arg(pos::kMinAcronym);
+                problem = QString("The acronym needs at least %1 characters.").arg(pos::kMinAcronym);
             else if (acronym.length() > int(pos::kMaxAcronym))
-                problem = QString("Acronym cannot exceed %1 characters").arg(pos::kMaxAcronym);
+                problem = QString("The acronym can have at most %1 characters.").arg(pos::kMaxAcronym);
             else if (!pos::isValidAcronym(ss(acronym)))
-                problem = "Acronym can only use letters and digits, with at least one letter";
+                problem = "Use letters and digits only, with at least one letter.";
             else if (const auto owner = m_services.products().findByAcronym(ss(acronym));
                      owner && owner->id != currentId)
-                problem = QString("Acronym '%1' is already used by '%2'").arg(acronym, qs(owner->name));
+                problem = QString("The acronym %1 is already used by %2.").arg(acronym, qs(owner->name));
 
             if (!problem.isEmpty()) {
                 m_acronym->setState("invalid");
@@ -299,44 +253,50 @@ void ProductEditDialog::onSave()
         }
     }
 
+    // A product needs a category until it has a barcode (the barcode is built from it).
+    const bool categoryLocked = !m_category->isEnabled();
+    if (!categoryLocked && m_category->currentIndex() < 0) {
+        m_category->setFocus();
+        m_banner->showMessage("Choose a category.", Banner::Error);
+        return;
+    }
+
     bool okPrice = false;
     const double price = m_price->text().trimmed().toDouble(&okPrice);
     if (!okPrice || price < 0.0) {
         m_price->setState("invalid");
         m_price->setFocus();
-        m_banner->showMessage("Enter a valid price in PKR (>= 0)", Banner::Error);
+        m_banner->showMessage("Enter a valid price in PKR (0 or more).", Banner::Error);
         return;
     }
 
     bool okTax = true;
     double tax = 0.0;
     const QString taxText = m_tax->text().trimmed();
-    if (!taxText.isEmpty()) {
+    if (!taxText.isEmpty())
         tax = taxText.toDouble(&okTax);
-    }
     if (!okTax || tax < 0.0) {
         m_tax->setState("invalid");
         m_tax->setFocus();
-        m_banner->showMessage("Enter a valid tax in PKR (>= 0)", Banner::Error);
+        m_banner->showMessage("Enter a valid tax in PKR (0 or more).", Banner::Error);
         return;
     }
 
     bool okDisc = true;
     double discount = 0.0;
     const QString discText = m_discount->text().trimmed();
-    if (!discText.isEmpty()) {
+    if (!discText.isEmpty())
         discount = discText.toDouble(&okDisc);
-    }
     if (!okDisc || discount < 0.0) {
         m_discount->setState("invalid");
         m_discount->setFocus();
-        m_banner->showMessage("Enter a valid discount in PKR (>= 0)", Banner::Error);
+        m_banner->showMessage("Enter a valid discount in PKR (0 or more).", Banner::Error);
         return;
     }
     if (discount > price + tax) {
         m_discount->setState("invalid");
         m_discount->setFocus();
-        m_banner->showMessage("Discount cannot exceed price + tax", Banner::Error);
+        m_banner->showMessage("The discount cannot be more than price plus tax.", Banner::Error);
         return;
     }
 
@@ -345,76 +305,53 @@ void ProductEditDialog::onSave()
     if (!okStock || stock < 0.0) {
         m_stock->setState("invalid");
         m_stock->setFocus();
-        m_banner->showMessage("Enter a valid available stock (>= 0)", Banner::Error);
+        m_banner->showMessage("Enter the available stock (0 or more).", Banner::Error);
         return;
-    }
-
-    std::string barcode;
-    std::string barcodeFile;
-
-    if (!m_original) {                                   // Add mode only: Edit never touches the barcode
-        barcode = ss(m_barcode->text().trimmed());
-        if (!barcode.empty()) {
-            if (!validate6Digits(barcode)) {
-                m_barcode->setState("invalid");
-                m_barcode->setFocus();
-                m_banner->showMessage("Barcode must be 6 digits and start with 1-9", Banner::Error);
-                return;
-            }
-            for (const auto& p : m_services.products().all()) {
-                if (p.barcode == barcode) {
-                    m_barcode->setState("invalid");
-                    m_barcode->setFocus();
-                    m_banner->showMessage(QString("Barcode already assigned to '%1'").arg(qs(p.name)), Banner::Error);
-                    return;
-                }
-            }
-        }
-
-        if (!barcode.empty()) {
-            const std::string path = "data/barcodes/" + barcode + ".png";
-            std::error_code ec;
-            std::filesystem::create_directories("data/barcodes", ec);
-            if (!std::filesystem::exists(path)) {
-                cv::Mat img = renderBarcode(encodeCode128C(barcode));
-                if (!img.empty() && saveBarcode(img, path))
-                    barcodeFile = path;
-            } else {
-                barcodeFile = path;
-            }
-        }
     }
 
     pos::Product prod;
     if (m_original)
         prod = *m_original;                              // keeps unit, barcode and barcode image
-
     if (!identityLocked) {
         prod.name = ss(name);
         prod.acronym = ss(acronym);
     }
-    if (!m_original) {
+    if (!m_original)
         prod.unit = (m_unit->currentIndex() == 0) ? pos::MeasureUnit::Count : pos::MeasureUnit::Weight;
-        prod.barcode = barcode;
-        prod.barcodeFile = barcodeFile;
-    }
+    if (!categoryLocked)
+        prod.categoryId = ss(m_category->currentData().toString());
     prod.unitPrice = price;
     prod.tax = tax;
     prod.discount = discount;
     prod.availableQty = stock;
 
-    bool saved = false;
-    if (m_original) {
-        saved = m_services.products().update(prod);
-        m_savedId = prod.id;
-    } else {
-        saved = m_services.products().add(prod);
-        m_savedId = prod.id;
+    const pos::ProductResult result = m_original ? m_services.productService().edit(prod)
+                                                 : m_services.productService().add(prod);
+    if (!result.ok()) {
+        switch (result.error) {
+        case pos::ProductError::EmptyName:   m_name->setState("invalid");     m_name->setFocus();     break;
+        case pos::ProductError::BadAcronym:  m_acronym->setState("invalid");  m_acronym->setFocus();  break;
+        case pos::ProductError::BadPrice:    m_price->setState("invalid");    m_price->setFocus();    break;
+        case pos::ProductError::BadDiscount: m_discount->setState("invalid"); m_discount->setFocus(); break;
+        case pos::ProductError::BadStock:    m_stock->setState("invalid");    m_stock->setFocus();    break;
+        case pos::ProductError::UnknownCategory: m_category->setFocus(); break;
+        default: break;
+        }
+        m_banner->showMessage(qs(result.message), Banner::Error, 5000);
+        return;
     }
 
-    if (!saved) {
-        m_banner->showMessage("Failed to save product to Product.txt", Banner::Error);
-        return;
+    m_savedId = m_original ? prod.id : result.product.id;
+
+    // A new product gets its barcode now: category ID + the next free serial.
+    if (!m_original) {
+        const pos::AssignReport report = m_services.assigner().assignAll();
+        if (report.failed > 0) {
+            m_notice = report.messages.empty()
+                           ? QString("The product was saved, but its barcode could not be created.")
+                           : QString("The product was saved, but its barcode could not be created: %1")
+                                 .arg(qs(report.messages.front()));
+        }
     }
 
     accept();

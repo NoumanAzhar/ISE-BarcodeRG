@@ -2,7 +2,10 @@
 
 #include "Product.h"
 
+#include <QString>
 #include <QWidget>
+
+#include <optional>
 
 class QGridLayout;
 class QLabel;
@@ -15,7 +18,9 @@ class ProductDetailsView : public QWidget {
 public:
     explicit ProductDetailsView(QWidget* parent = nullptr);
 
-    void showProduct(const pos::Product& product);
+    // categoryName: nullopt hides the Category row, an empty text shows "none".
+    void showProduct(const pos::Product& product,
+                     const std::optional<QString>& categoryName = std::nullopt);
     void showMessage(const QString& text);     // empty state: one centred muted line
     void clear();                              // blank
 
@@ -23,11 +28,13 @@ private:
     enum Page { DetailsPage, MessagePage, BlankPage };
 
     QWidget* buildDetailsPage();
-    QLabel* addRow(QGridLayout* grid, const QString& label);
+    QLabel* addRow(QGridLayout* grid, const QString& label, QLabel** keyOut = nullptr);
 
     QStackedLayout* m_stack = nullptr;
     QLabel* m_name = nullptr;
     QLabel* m_acronym = nullptr;
+    QLabel* m_categoryKey = nullptr;
+    QLabel* m_category = nullptr;
     QLabel* m_id = nullptr;
     QLabel* m_barcode = nullptr;
     QLabel* m_unit = nullptr;
