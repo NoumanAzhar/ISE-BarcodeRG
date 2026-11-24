@@ -6,6 +6,7 @@
 #include"Product.h"
 #include"order.h"
 using namespace std;
+namespace pos {
 
 BillGenerator::BillGenerator(const pos::IOrderRepository& orders, const pos::IProductRepository& products, IBillRepository& bills)
 	: orders_(orders), products_(products), bills_(bills) {}
@@ -31,3 +32,4 @@ Bill BillGenerator::generateBill(const string& orderId, const BillAdjustments& a
 		throw runtime_error("Could not save the bill for order " + orderId);
 	return bill;
 }
+} // namespace pos
