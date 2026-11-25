@@ -9,6 +9,9 @@ namespace pos {
 
     namespace {
 
+        const char* const kAlreadyEdited =
+            "This order has already been edited once. A paid order can only be edited one time.";
+
         // true if a paid order can still be edited today (order date .. order date + 7 days)
         bool windowOpen(const Order& order, const IClock& clock, string& problem)
         {
@@ -39,6 +42,7 @@ namespace pos {
         case ApprovalStatus::Pending:  return "pending";
         case ApprovalStatus::Approved: return "approved";
         case ApprovalStatus::Rejected: return "rejected";
+        case ApprovalStatus::Used:     return "used";
         }
         return "pending";
     }
@@ -48,7 +52,15 @@ namespace pos {
         if (text == "pending")  return ApprovalStatus::Pending;
         if (text == "approved") return ApprovalStatus::Approved;
         if (text == "rejected") return ApprovalStatus::Rejected;
+        if (text == "used")     return ApprovalStatus::Used;
         return nullopt;
+    }
+
+    string editedAtText(const Approval& approval)
+    {
+        if (approval.status != ApprovalStatus::Used || approval.editDate.empty())
+            return "";
+        return approval.editTime.empty() ? approval.editDate : approval.editDate + "  " + approval.editTime;
     }
 
     // ---------------- FileApprovalRepository ----------------
@@ -58,12 +70,12 @@ namespace pos {
         Record approvalToRecord(const Approval& a)
         {
             return { a.orderId, a.requestDate, a.requestTime, toString(a.status),
-                     a.decisionDate, a.decisionTime };
+                     a.decisionDate, a.decisionTime, a.editDate, a.editTime };
         }
 
         optional<Approval> recordToApproval(const Record& r)
         {
-            if (r.size() != 6 || r[0].empty())
+            if ((r.size() != 6 && r.size() != 8) || r[0].empty())
                 return nullopt;
             const optional<ApprovalStatus> status = parseApprovalStatus(r[3]);
             if (!status)
@@ -75,6 +87,10 @@ namespace pos {
             a.status = *status;
             a.decisionDate = r[4];
             a.decisionTime = r[5];
+            if (r.size() == 8) {
+                a.editDate = r[6];
+                a.editTime = r[7];
+            }
             return a;
         }
 
@@ -140,11 +156,15 @@ namespace pos {
             break;
         }
 
+        const optional<Approval> approval = approvals_.findByOrderId(orderId);
+        // The approved edit can be used once; after that the order is closed for editing.
+        if (approval && approval->status == ApprovalStatus::Used)
+            return { EditAccess::AlreadyEdited, kAlreadyEdited };
+
         string problem;
         if (!windowOpen(*order, clock_, problem))
             return { EditAccess::Expired, problem };
 
-        const optional<Approval> approval = approvals_.findByOrderId(orderId);
         if (!approval)
             return { EditAccess::NeedsApproval, "Manager approval is required to edit a paid order." };
         switch (approval->status) {
@@ -152,10 +172,23 @@ namespace pos {
             return { EditAccess::Allowed, "" };
         case ApprovalStatus::Pending:
             return { EditAccess::PendingApproval, "Waiting for the manager to approve this edit." };
+        case ApprovalStatus::Used:
+            return { EditAccess::AlreadyEdited, kAlreadyEdited };
         case ApprovalStatus::Rejected:
             break;
         }
         return { EditAccess::Rejected, "The manager rejected the edit of this order." };
+    }
+
+    bool OrderEditService::markEdited(const string& orderId)
+    {
+        optional<Approval> a = approvals_.findByOrderId(orderId);
+        if (!a || a->status != ApprovalStatus::Approved)
+            return false;
+        a->status = ApprovalStatus::Used;
+        a->editDate = clock_.date();
+        a->editTime = clock_.time();
+        return approvals_.save(*a);
     }
 
     bool OrderEditService::requestApproval(const string& orderId)

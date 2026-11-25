@@ -71,6 +71,8 @@ private:
     QLabel* m_customer = nullptr;
     QLabel* m_contact = nullptr;
     QLabel* m_when = nullptr;
+    QLabel* m_editedCaption = nullptr;         // shown only for an order that was edited
+    QLabel* m_edited = nullptr;
     QLabel* m_payment = nullptr;
     QLabel* m_total = nullptr;
     QLabel* m_items = nullptr;

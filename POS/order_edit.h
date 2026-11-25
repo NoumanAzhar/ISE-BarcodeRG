@@ -10,13 +10,18 @@
 namespace pos {
 
     // ---- Layer 1: model ----
-    enum class ApprovalStatus { Pending, Approved, Rejected };
+    // Used = the approved edit has been done (a paid order can be edited only once).
+    enum class ApprovalStatus { Pending, Approved, Rejected, Used };
 
     struct Approval {
         std::string orderId, requestDate, requestTime;
         ApprovalStatus status = ApprovalStatus::Pending;
         std::string decisionDate, decisionTime;   // empty until the manager decides
+        std::string editDate, editTime;           // empty until the approved edit is saved
     };
+
+    // "2026-11-26  14:05:00" once the approved edit has been done; empty before that.
+    std::string editedAtText(const Approval& approval);
 
     std::string toString(ApprovalStatus status);
     std::optional<ApprovalStatus> parseApprovalStatus(const std::string& text);
@@ -31,7 +36,8 @@ namespace pos {
     };
 
     // ---- Layer 2: Approval.txt implementation ----
-    // orderId requestDate requestTime status decisionDate decisionTime
+    // orderId requestDate requestTime status decisionDate decisionTime editDate editTime
+    // (older files with the first six fields still load)
     class FileApprovalRepository : public IApprovalRepository {
     public:
         explicit FileApprovalRepository(std::string path);
@@ -43,7 +49,7 @@ namespace pos {
     };
 
     // ---- Layer 3: rules ----
-    enum class EditAccess { Allowed, NeedsApproval, PendingApproval, Rejected, Expired, Archived, NotFound };
+    enum class EditAccess { Allowed, NeedsApproval, PendingApproval, Rejected, Expired, Archived, NotFound, AlreadyEdited };
 
     struct EditCheck {
         EditAccess access = EditAccess::NotFound;
@@ -56,6 +62,9 @@ namespace pos {
     public:
         virtual ~IEditPolicy() = default;
         virtual EditCheck check(const std::string& orderId) const = 0;
+        // Called once an edit of a paid order has been saved: it uses up the approval
+        // and records the edit date and time. false if there was no approved edit.
+        virtual bool markEdited(const std::string& orderId) = 0;
     };
 
     class OrderEditService : public IEditPolicy {
@@ -63,8 +72,10 @@ namespace pos {
         OrderEditService(IOrderRepository& orders, IApprovalRepository& approvals, const IClock& clock);
 
         // on hold or in progress: Allowed; archived: never;
-        // paid: within kEditWindowDays of the order date (day 7 is still allowed) AND approved.
+        // paid: within kEditWindowDays of the order date (day 7 is still allowed) AND approved,
+        // and only once: after the edit is saved the order is AlreadyEdited.
         EditCheck check(const std::string& orderId) const override;
+        bool markEdited(const std::string& orderId) override;
 
         bool requestApproval(const std::string& orderId);   // cashier: paid order, window still open
         std::vector<Approval> pending() const;               // manager

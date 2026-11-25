@@ -3,6 +3,7 @@
 #include "Bill.h"
 #include "Data_Files.h"
 #include "order.h"
+#include "order_edit.h"
 
 namespace pos {
 
@@ -15,6 +16,7 @@ namespace pos {
     struct BillOrderInfo {
         std::string customerContact;   // phone number, optional
         std::string paymentMode;       // see paymentModeText
+        std::string editedAt;          // "date  time" of the approved edit; empty if never edited
     };
 
     // "Cash", "Bank-ABL", "Wallet-JazzCash". A card payment is shown as Bank and a
@@ -25,8 +27,10 @@ namespace pos {
     // Phone number and payment mode taken from an order.
     BillOrderInfo billOrderInfo(const Order& order);
 
-    // The same, looked up by order id. Empty info when the order is not found.
-    BillOrderInfo billOrderInfoFor(const IOrderRepository& orders, const std::string& orderId);
+    // The same, looked up by order id. Empty info when the order is not found. With an
+    // approval repository it also fills editedAt for an order that was edited.
+    BillOrderInfo billOrderInfoFor(const IOrderRepository& orders, const std::string& orderId,
+                                   const IApprovalRepository* approvals = nullptr);
 
     // The bill as monospace text (46 characters per line, lines joined by '\n').
     // This is also exactly what the PDF contains.
@@ -51,13 +55,16 @@ namespace pos {
         // With an order repository the PDF also shows the customer's phone number and
         // the payment mode (looked up by the bill's order id). Without one those two
         // lines are left out.
-        explicit PdfBillExporter(const IOrderRepository* orders = nullptr);
+        // With an approval repository it also shows the Edit Date of an edited order.
+        explicit PdfBillExporter(const IOrderRepository* orders = nullptr,
+                                 const IApprovalRepository* approvals = nullptr);
         // Creates the folder if needed; writes a temp file, then renames it.
         bool exportBill(const Bill& bill, const std::string& path) override;
         // The PDF file content (for tests and for callers that want the bytes).
         std::string render(const Bill& bill) const;
     private:
         const IOrderRepository* orders_;
+        const IApprovalRepository* approvals_;
     };
 
 } // namespace pos

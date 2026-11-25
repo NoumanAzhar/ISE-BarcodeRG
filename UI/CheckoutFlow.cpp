@@ -14,7 +14,8 @@ void showBill(pos::AppServices& services, const pos::CheckoutResult& result, QWi
 {
     if (!result.bill)
         return;
-    const pos::BillOrderInfo info = pos::billOrderInfoFor(services.orders(), result.bill->getOrderId());
+    const pos::BillOrderInfo info = pos::billOrderInfoFor(services.orders(), result.bill->getOrderId(),
+                                                                   &services.approvals());
     BillDialog dialog(*result.bill, info, services.exporter(), parent);
     dialog.exec();
 }

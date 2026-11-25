@@ -62,7 +62,7 @@ namespace pos {
         IProductRepository& products_;
         InventoryService& inventory_;
         const SeasonService& seasons_;
-        const IEditPolicy& editPolicy_;
+        IEditPolicy& editPolicy_;
         const IClock& clock_;
         BillGenerator& bills_;
 
@@ -71,7 +71,7 @@ namespace pos {
             IProductRepository& products,
             InventoryService& inventory,
             const SeasonService& seasons,
-            const IEditPolicy& editPolicy,
+            IEditPolicy& editPolicy,
             const IClock& clock,
             BillGenerator& billGenerator);
 

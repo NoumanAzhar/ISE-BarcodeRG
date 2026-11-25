@@ -64,7 +64,7 @@ namespace pos {
 
     CheckoutService::CheckoutService(IOrderRepository& orders, IProductRepository& products,
         InventoryService& inventory, const SeasonService& seasons,
-        const IEditPolicy& editPolicy, const IClock& clock,
+        IEditPolicy& editPolicy, const IClock& clock,
         BillGenerator& billGenerator)
         : orders_(orders), products_(products), inventory_(inventory), seasons_(seasons), editPolicy_(editPolicy), clock_(clock), bills_(billGenerator) {}
 
@@ -187,6 +187,12 @@ namespace pos {
             return fail(CheckoutStatus::OrderSaveFailed, "Could not save the order.");
         }
 
+        // An approved edit is used up by saving it: a paid order can only be edited once.
+        // The edit date and time are recorded here, so the bill below can show them.
+        string editWarning;
+        if (isEdit && !editPolicy_.markEdited(order.id))
+            editWarning = " The edit date could not be recorded.";
+
         // 9. bill (new, or replaced under the same id)
         CheckoutResult result;
         result.orderId = order.id;
@@ -206,7 +212,7 @@ namespace pos {
             return result;
         }
         result.message = string("Order ") + order.id + (isEdit ? " updated. Bill " : " paid. Bill ")
-            + result.bill->getBillId() + (isEdit ? " replaced." : " generated.");
+            + result.bill->getBillId() + (isEdit ? " replaced." : " generated.") + editWarning;
         return result;
     }
 
