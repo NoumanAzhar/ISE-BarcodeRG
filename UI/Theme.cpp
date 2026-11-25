@@ -197,19 +197,6 @@ QDateEdit::down-arrow {
     border-left: 5px solid transparent; border-right: 5px solid transparent;
     border-top: 6px solid @muted;
 }
-QCalendarWidget QWidget { background: @surface2; color: @text; }
-QCalendarWidget QToolButton {
-    background: transparent; color: @text; border: none; border-radius: 8px;
-    padding: 6px 10px; font-weight: 600;
-}
-QCalendarWidget QToolButton:hover { background: @hover_bg; }
-QCalendarWidget QSpinBox { background: @surface2; color: @text; border: 1px solid @border; }
-QCalendarWidget QAbstractItemView:enabled {
-    background: @surface2; color: @text; outline: none;
-    selection-background-color: @accent; selection-color: @on_accent;
-}
-QCalendarWidget QAbstractItemView:disabled { color: @muted; }
-
 /* ---- lists and tables (put them inside an inset well) ---- */
 QListWidget, QListView, QTableWidget, QTableView, QTreeView {
     background: transparent; border: none; outline: none;
@@ -228,6 +215,29 @@ QHeaderView::section {
     border-bottom: 1px solid @border; padding: 8px 10px; font-weight: 600;
 }
 QTableCornerButton::section { background: transparent; border: none; }
+
+/* ---- calendar drop-down ----
+   Its day grid is a QTableView, so the table rules above (cell padding, header padding)
+   would squeeze the day numbers and the weekday letters out of sight: reset them here. */
+QCalendarWidget QWidget { background: @surface2; color: @text; }
+QCalendarWidget QToolButton {
+    background: transparent; color: @text; border: none; border-radius: 8px;
+    padding: 6px 10px; font-weight: 600;
+}
+QCalendarWidget QToolButton:hover { background: @hover_bg; }
+QCalendarWidget QSpinBox { background: @surface2; color: @text; border: 1px solid @border; }
+QCalendarWidget QAbstractItemView:enabled {
+    background: @surface2; color: @text; outline: none;
+    selection-background-color: @accent; selection-color: @on_accent;
+}
+QCalendarWidget QAbstractItemView:disabled { color: @muted; }
+QCalendarWidget QTableView::item { padding: 0px; margin: 0px; border: none; }
+QCalendarWidget QTableView::item:hover { background: @hover_bg; }
+QCalendarWidget QTableView::item:selected { background: @accent; color: @on_accent; }
+QCalendarWidget QTableView::item:disabled { color: @muted; }
+QCalendarWidget QHeaderView::section {
+    background: transparent; color: @muted; border: none; padding: 0px; font-weight: 600;
+}
 
 QScrollArea { background: transparent; border: none; }
 QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }

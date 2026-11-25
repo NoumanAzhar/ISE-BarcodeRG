@@ -13,6 +13,8 @@
 
 #include <string>
 
+class QDateEdit;
+
 // Non-ASCII characters used in the UI, written as code points so the source
 // files stay plain ASCII (no encoding trouble with any compiler).
 const QChar kArrowLeft(0x2190);
@@ -43,6 +45,10 @@ QLabel* makeLabel(const QString& text, const char* objectName, QWidget* parent =
 
 // A caption over an input: the usual form row.
 QWidget* makeField(const QString& caption, QWidget* input, QWidget* parent = nullptr);
+
+// A date field with a drop-down calendar: "26 Nov 2026", weeks start on Monday, weekday
+// letters M T W T F S S on top, and every day (Saturday and Sunday too) in the same colour.
+void setupDateEdit(QDateEdit* edit);
 
 // Raised card / inset well (both already hold their shadow room as contents margin).
 NeuFrame* makeCard(QWidget* parent = nullptr);

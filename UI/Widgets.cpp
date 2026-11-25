@@ -2,14 +2,20 @@
 
 #include "Theme.h"
 
+#include <QCalendarWidget>
+#include <QDateEdit>
 #include <QDragEnterEvent>
 #include <QDragLeaveEvent>
 #include <QDropEvent>
+#include <QFont>
+#include <QIcon>
 #include <QHBoxLayout>
 #include <QMimeData>
 #include <QPainter>
 #include <QPainterPath>
 #include <QStyle>
+#include <QTextCharFormat>
+#include <QToolButton>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -52,6 +58,38 @@ QWidget* makeField(const QString& caption, QWidget* input, QWidget* parent)
     layout->addWidget(makeLabel(caption, "fieldLabel", field));
     layout->addWidget(input);
     return field;
+}
+
+void setupDateEdit(QDateEdit* edit)
+{
+    edit->setCalendarPopup(true);
+    edit->setDisplayFormat("d MMM yyyy");
+
+    QCalendarWidget* calendar = edit->calendarWidget();
+    calendar->setFirstDayOfWeek(Qt::Monday);
+    calendar->setHorizontalHeaderFormat(QCalendarWidget::SingleLetterDayNames);   // M T W T F S S
+    calendar->setVerticalHeaderFormat(QCalendarWidget::NoVerticalHeader);          // no week numbers
+    calendar->setGridVisible(false);
+
+    // Qt paints Saturday and Sunday red by default: give every day the plain look.
+    for (Qt::DayOfWeek day : { Qt::Monday, Qt::Tuesday, Qt::Wednesday, Qt::Thursday,
+                               Qt::Friday, Qt::Saturday, Qt::Sunday })
+        calendar->setWeekdayTextFormat(day, QTextCharFormat());
+    QTextCharFormat header;
+    header.setFontWeight(QFont::DemiBold);
+    calendar->setHeaderTextFormat(header);
+
+    // The month arrows are drawn as plain text so they are readable in both themes.
+    if (auto* previous = calendar->findChild<QToolButton*>("qt_calendar_prevmonth")) {
+        previous->setIcon(QIcon());
+        previous->setText(QString(QChar(0x2039)));
+        previous->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    }
+    if (auto* next = calendar->findChild<QToolButton*>("qt_calendar_nextmonth")) {
+        next->setIcon(QIcon());
+        next->setText(QString(QChar(0x203A)));
+        next->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    }
 }
 
 NeuFrame* makeCard(QWidget* parent)

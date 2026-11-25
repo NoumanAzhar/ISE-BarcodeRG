@@ -127,8 +127,7 @@ QWidget* ReportsPage::buildViewer()
     m_from = new QDateEdit(QDate::currentDate(), m_periodBar);
     m_to = new QDateEdit(QDate::currentDate(), m_periodBar);
     for (QDateEdit* edit : { m_from, m_to }) {
-        edit->setCalendarPopup(true);
-        edit->setDisplayFormat("d MMM yyyy");
+        setupDateEdit(edit);
         edit->setMinimumWidth(160);
     }
     // the period never ends before it starts

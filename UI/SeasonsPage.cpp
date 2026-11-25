@@ -63,7 +63,7 @@ SeasonsPage::SeasonsPage(pos::AppServices& services, QWidget* parent)
         { "From", DataTable::Align::Left, false },
         { "To", DataTable::Align::Left, false },
         { "Discount", DataTable::Align::Right, false },
-        { "Status", DataTable::Align::Left, true },
+        { "Status", DataTable::Align::Center, true },
     });
     m_table->setEmptyText("No discount seasons yet.\nAdd one on the right.");
 
@@ -87,8 +87,7 @@ QWidget* SeasonsPage::buildSide()
     m_from = new QDateEdit(QDate::currentDate(), card);
     m_to = new QDateEdit(QDate::currentDate(), card);
     for (QDateEdit* edit : { m_from, m_to }) {
-        edit->setCalendarPopup(true);
-        edit->setDisplayFormat("d MMM yyyy");
+        setupDateEdit(edit);
         edit->setMinimumDate(QDate::currentDate());
         edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     }
