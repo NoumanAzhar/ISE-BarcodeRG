@@ -25,6 +25,9 @@ namespace pos {
     // Phone number and payment mode taken from an order.
     BillOrderInfo billOrderInfo(const Order& order);
 
+    // The same, looked up by order id. Empty info when the order is not found.
+    BillOrderInfo billOrderInfoFor(const IOrderRepository& orders, const std::string& orderId);
+
     // The bill as monospace text (46 characters per line, lines joined by '\n').
     // This is also exactly what the PDF contains.
     std::string formatBill(const Bill& bill, const BillOrderInfo& info = BillOrderInfo());

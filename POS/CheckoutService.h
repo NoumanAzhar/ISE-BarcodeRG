@@ -26,10 +26,18 @@ namespace pos {
         EditNotAllowed
     };
 
+    // The smallest banknote in Pakistan is PKR 10.
+    inline constexpr double kSmallestNote = 10.0;
+
+    // Cash to collect for a bill: the payable amount rounded UP to a whole multiple
+    // of the smallest note (1234.50 -> 1240, 1240.00 -> 1240). The difference is
+    // given back as change.
+    double cashToCollect(double payable);
+
     struct Payment {
         PaymentMode mode = PaymentMode::None;
         std::string merchant;
-        double amountReceived = 0;
+        double amountReceived = 0;   // cash: 0 = collect cashToCollect(payable); card/wallet: ignored (exact)
         double specialPercent = 0;
     };
 

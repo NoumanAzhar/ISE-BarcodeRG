@@ -184,6 +184,12 @@ namespace pos {
         return { order.customerContact, paymentModeText(order.paymentMode, order.paymentMerchant) };
     }
 
+    BillOrderInfo billOrderInfoFor(const IOrderRepository& orders, const std::string& orderId)
+    {
+        const std::optional<Order> order = orders.findById(orderId);
+        return order ? billOrderInfo(*order) : BillOrderInfo();
+    }
+
     std::string formatBill(const Bill& bill, const BillOrderInfo& info)
     {
         std::string text;
@@ -211,11 +217,8 @@ namespace pos {
     std::string PdfBillExporter::render(const Bill& bill) const
     {
         BillOrderInfo info;
-        if (orders_) {
-            const std::optional<Order> order = orders_->findById(bill.getOrderId());
-            if (order)
-                info = billOrderInfo(*order);
-        }
+        if (orders_)
+            info = billOrderInfoFor(*orders_, bill.getOrderId());
         const std::vector<Line> lines = billLines(bill, info);
 
         int height = 2 * kMargin + static_cast<int>(lines.size()) * kLeading;

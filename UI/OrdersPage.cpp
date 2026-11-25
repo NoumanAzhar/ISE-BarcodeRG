@@ -10,6 +10,7 @@
 #include "PosActions.h"
 #include "Widgets.h"
 #include "access.h"
+#include "bill_pdf.h"
 #include "order_edit.h"
 
 #include <QGridLayout>
@@ -501,6 +502,7 @@ void OrdersPage::viewBill(const QString& orderId)
         m_banner->showMessage("No bill was found for this order.", Banner::Error, 4000);
         return;
     }
-    BillDialog dialog(*bill, m_services.exporter(), this);
+    const pos::BillOrderInfo info = pos::billOrderInfoFor(m_services.orders(), bill->getOrderId());
+    BillDialog dialog(*bill, info, m_services.exporter(), this);
     dialog.exec();
 }

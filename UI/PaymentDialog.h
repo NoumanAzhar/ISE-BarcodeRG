@@ -31,7 +31,7 @@ public:
     pos::PaymentMode mode() const;      // Cash, Card or Wallet
     QString merchant() const;           // the bank or wallet picked from the list; empty for Cash
     double specialPercent() const;      // 0 when none
-    double amountReceived() const;      // 0 = exactly the amount to pay (always for card and wallet)
+    double amountReceived() const;      // cash: the amount typed (starts at the payable rounded up to a multiple of 10); 0 for card and wallet
 
 private:
     bool needsMerchant() const;

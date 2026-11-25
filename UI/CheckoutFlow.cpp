@@ -2,6 +2,7 @@
 
 #include "AppServices.h"
 #include "BillDialog.h"
+#include "bill_pdf.h"
 #include "CheckoutService.h"
 #include "OrderTotals.h"
 #include "PaymentDialog.h"
@@ -13,7 +14,8 @@ void showBill(pos::AppServices& services, const pos::CheckoutResult& result, QWi
 {
     if (!result.bill)
         return;
-    BillDialog dialog(*result.bill, services.exporter(), parent);
+    const pos::BillOrderInfo info = pos::billOrderInfoFor(services.orders(), result.bill->getOrderId());
+    BillDialog dialog(*result.bill, info, services.exporter(), parent);
     dialog.exec();
 }
 

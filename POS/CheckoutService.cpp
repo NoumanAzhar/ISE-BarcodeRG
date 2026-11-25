@@ -56,6 +56,12 @@ namespace pos {
 
     } // namespace
 
+    double cashToCollect(double payable) {
+        if (!(payable > kEpsilon))
+            return 0.0;
+        return ceil(payable / kSmallestNote - kEpsilon) * kSmallestNote;
+    }
+
     CheckoutService::CheckoutService(IOrderRepository& orders, IProductRepository& products,
         InventoryService& inventory, const SeasonService& seasons,
         const IEditPolicy& editPolicy, const IClock& clock,
@@ -135,7 +141,12 @@ namespace pos {
         const BillTotals totals = calculator.compute(lines, seasonalPercent, payment.specialPercent);
         if(totals.withoutTax+totals.tax-totals.productDiscount< -kEpsilon)
             return fail(CheckoutStatus::InvalidTotal, "The discount is larger than the amount payable.");
-        if (payment.amountReceived > 0 && payment.amountReceived < totals.payable - kEpsilon)
+        // Cash is taken in whole notes: with no amount given, the cashier collects the
+        // payable rounded up to the next multiple of 10 and the rest is change.
+        double amountReceived = payment.amountReceived;
+        if (payment.mode == PaymentMode::Cash && amountReceived <= 0)
+            amountReceived = cashToCollect(totals.payable);
+        if (amountReceived > 0 && amountReceived < totals.payable - kEpsilon)
             return fail(CheckoutStatus::AmountTooLow, "The amount received is less than the amount payable.");
 
         // 6. mark paid
@@ -183,7 +194,7 @@ namespace pos {
         BillAdjustments adj;
         adj.seasonalPercent = seasonalPercent;
         adj.specialPercent = payment.specialPercent;
-        adj.amountReceived = payment.amountReceived;
+        adj.amountReceived = amountReceived;
         adj.date = order.date;
         adj.time = order.time;
         try {
