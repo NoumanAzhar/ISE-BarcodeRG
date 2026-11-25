@@ -7,14 +7,14 @@
 namespace pos { class AppServices; struct DateRange; }
 
 class DataTable;
-class NeuLineEdit;
 class NeuSegmented;
+class QDateEdit;
 class QLabel;
 class QListWidget;
 class QWidget;
 
 // Manager: the six reports as tables. Sales reports can be limited to a
-// day, week, month, year or any period typed in.
+// day, week, month, year or any period picked from the drop-down calendars.
 class ReportsPage : public PageBase {
     Q_OBJECT
 public:
@@ -28,7 +28,7 @@ private:
 
     void showReport(int index);
     void fillPeriod(int periodIndex);  // sets From / To from Day, Week, Month or Year
-    void onRangeEdited();
+    void onRangeEdited();              // a date was picked: refresh the sales report
     void render(const pos::ReportTable& table);
     bool usesRange(int index) const;
     pos::DateRange range() const;
@@ -41,8 +41,8 @@ private:
     QLabel* m_about = nullptr;
     QWidget* m_periodBar = nullptr;
     NeuSegmented* m_period = nullptr;
-    NeuLineEdit* m_from = nullptr;
-    NeuLineEdit* m_to = nullptr;
+    QDateEdit* m_from = nullptr;
+    QDateEdit* m_to = nullptr;
     DataTable* m_table = nullptr;
     QLabel* m_footer = nullptr;
 };

@@ -12,6 +12,7 @@ class Banner;
 class DataTable;
 class NeuButton;
 class NeuLineEdit;
+class QDateEdit;
 class QLabel;
 class QWidget;
 
@@ -33,13 +34,14 @@ private:
     void addSeason();
     void toggleSelected();
     int selectedIndex() const;          // position in Seasons.txt, -1 when none
+    void clearForm();                   // dates back to today, discount empty
 
     pos::AppServices& m_services;
     std::vector<pos::Season> m_seasons;
 
     DataTable* m_table = nullptr;
-    NeuLineEdit* m_from = nullptr;
-    NeuLineEdit* m_to = nullptr;
+    QDateEdit* m_from = nullptr;
+    QDateEdit* m_to = nullptr;
     NeuLineEdit* m_percent = nullptr;
     Banner* m_banner = nullptr;
     QWidget* m_selectedBox = nullptr;

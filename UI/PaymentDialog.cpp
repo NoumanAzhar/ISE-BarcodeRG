@@ -65,7 +65,7 @@ PaymentDialog::PaymentDialog(const PaymentQuote& quote, QWidget* parent)
     m_special->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9]{0,2}([.][0-9]{0,2})?"), m_special));
 
     m_received = new NeuLineEdit(card);
-    m_received->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9]{0,9}([.][0-9]{0,2})?"), m_received));
+    m_received->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9]{0,9}"), m_received));   // whole rupees only, no decimal point
     m_receivedField = makeField("Amount received", m_received, card);
 
     auto* amounts = new QHBoxLayout;
