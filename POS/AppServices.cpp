@@ -37,7 +37,7 @@ namespace pos {
         order_(products_),
         hold_(order_, orders_, clock_),
         reports_(orders_, bills_, products_),
-        exporter_(&orders_),
+        exporter_(&orders_, &approvals_),
         catalog_(products_),
         assigner_(products_, categories_, kBarcodeImageDir)
     {

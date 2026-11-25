@@ -9,7 +9,7 @@ namespace pos {
     // One line of Seasons.txt: startDate endDate discountPercent isActive
     struct Season {
         std::string startDate, endDate;   // yyyy-MM-dd, both inclusive
-        double percent = 0;               // 0 < percent <= 100
+        double percent = 0;               // 0 < percent <= 100 (new seasons: <= kMaxSeasonPercent)
         bool active = false;
     };
 
@@ -51,7 +51,7 @@ namespace pos {
     class SeasonService {
     public:
         explicit SeasonService(ISeasonRepository& repo);
-        // 0 < percent <= 100, both dates real, end not before start, not an exact duplicate
+        // 0 < percent <= kMaxSeasonPercent, both dates real, end not before start, not an exact duplicate
         SeasonResult add(const Season& season);
         // index = position in the list the GUI shows (the same order as all())
         bool setActive(int index, bool active);   // false if there is no such season or the save fails

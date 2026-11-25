@@ -6,14 +6,14 @@ endobj
 << /Type /Pages /Kids [3 0 R] /Count 1 >>
 endobj
 3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 322 420] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 322 396] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
 endobj
 4 0 obj
-<< /Length 1449 >>
+<< /Length 1349 >>
 stream
 BT
 12 TL
-36 375 Td
+36 351 Td
 /F2 9 Tf
 (                  BARCODERG) Tj
 T*
@@ -24,15 +24,15 @@ T*
 T*
 (Bill id     : 000000002) Tj
 T*
-(Order id    : 00000225) Tj
+(Order id    : 00000326) Tj
 T*
-(Customer    : Nouman) Tj
-T*
-(Phone       : 03166076692) Tj
+(Customer    : Walk-in) Tj
 T*
 (Payment Mode: Cash) Tj
 T*
-(Date        : 2026-11-25  20:16:52) Tj
+(Date        : 2026-11-26  03:05:59) Tj
+T*
+(Edit Date   : 2026-11-26  03:08:19) Tj
 T*
 (Status      : PAID) Tj
 T*
@@ -42,37 +42,33 @@ T*
 (ITEM         QTY     PRICE     DISC     AMOUNT) Tj
 T*
 /F1 9 Tf
-(COCOMO         2     10.00     0.00      20.00) Tj
-T*
-(KNORR          1     60.00     0.00      60.00) Tj
-T*
 (SALT           1     60.00     0.00      60.00) Tj
+T*
+(SOOPER         1     40.00     2.00      40.00) Tj
 T*
 (OLPERS         1    340.00    10.00     340.00) Tj
 T*
 (DALDA          1    560.00     0.00     560.00) Tj
 T*
-(SUGAR          1    180.00     0.00     180.00) Tj
-T*
-(KITKAT         1     70.00     0.00      70.00) Tj
-T*
 (----------------------------------------------) Tj
 T*
-(Subtotal                               1290.00) Tj
+(Subtotal                               1000.00) Tj
 T*
-(Tax                                     126.00) Tj
+(Tax                                      97.00) Tj
 T*
-(Product discount                        -10.00) Tj
+(Product discount                        -12.00) Tj
+T*
+(Seasonal discount                       -54.25) Tj
 T*
 (----------------------------------------------) Tj
 T*
 /F2 9 Tf
-(PAYABLE                            PKR 1406.00) Tj
+(PAYABLE                            PKR 1030.75) Tj
 T*
 /F1 9 Tf
-(Amount received                        1410.00) Tj
+(Amount received                        1040.00) Tj
 T*
-(Balance returned                          4.00) Tj
+(Balance returned                          9.25) Tj
 T*
 (----------------------------------------------) Tj
 T*
@@ -94,10 +90,10 @@ xref
 0000000058 00000 n 
 0000000115 00000 n 
 0000000251 00000 n 
-0000001752 00000 n 
-0000001820 00000 n 
+0000001652 00000 n 
+0000001720 00000 n 
 trailer
 << /Size 7 /Root 1 0 R >>
 startxref
-1893
+1793
 %%EOF

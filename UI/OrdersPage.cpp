@@ -25,7 +25,7 @@
 
 namespace {
 
-enum Filter { ShowAll, ShowOnHold, ShowPaid, ShowWaiting };
+enum Filter { ShowAll, ShowOnHold, ShowPaid, ShowApproved, ShowWaiting };
 
 constexpr int kMaxItemLines = 6;
 
@@ -49,6 +49,10 @@ StatusInfo statusOf(const pos::Order& order, int access)
     }
     if (access == int(pos::EditAccess::PendingApproval))
         return { "Waiting for approval", DataTable::Tone::Warn, "warning" };
+    if (access == int(pos::EditAccess::Allowed))                   // approved, not edited yet
+        return { "Approved", DataTable::Tone::Warn, "warning" };
+    if (access == int(pos::EditAccess::AlreadyEdited))             // the one edit is done
+        return { "Edited", DataTable::Tone::Muted, "info" };
     return { "Paid", DataTable::Tone::Good, "success" };
 }
 
@@ -69,13 +73,16 @@ QString paymentText(const pos::Order& order)
     }
 }
 
-QLabel* addDetail(QGridLayout* grid, const QString& caption, QWidget* parent)
+QLabel* addDetail(QGridLayout* grid, const QString& caption, QWidget* parent, QLabel** captionOut = nullptr)
 {
     const int row = grid->rowCount();
     auto* value = makeLabel(QString(), "fieldLabel", parent);
     value->setWordWrap(true);
-    grid->addWidget(makeLabel(caption, "muted", parent), row, 0, Qt::AlignTop);
+    auto* captionLabel = makeLabel(caption, "muted", parent);
+    grid->addWidget(captionLabel, row, 0, Qt::AlignTop);
     grid->addWidget(value, row, 1, Qt::AlignTop);
+    if (captionOut)
+        *captionOut = captionLabel;
     return value;
 }
 
@@ -110,8 +117,8 @@ QWidget* OrdersPage::buildListSide()
 
     m_search = new NeuLineEdit(side);
     m_search->setPlaceholderText("Search order number or customer");
-    m_filter = new NeuSegmented(QStringList{ "All", "On hold", "Paid", "Waiting" }, side);
-    m_filter->setMinimumWidth(380);
+    m_filter = new NeuSegmented(QStringList{ "All", "On hold", "Paid", "Approved", "Waiting" }, side);
+    m_filter->setMinimumWidth(470);
 
     auto* top = new QHBoxLayout;
     top->setSpacing(2);
@@ -167,6 +174,7 @@ QWidget* OrdersPage::buildDetails()
     m_customer = addDetail(grid, "Customer", m_details);
     m_contact = addDetail(grid, "Contact", m_details);
     m_when = addDetail(grid, "Paid on", m_details);
+    m_edited = addDetail(grid, "Edited on", m_details, &m_editedCaption);
     m_payment = addDetail(grid, "Payment", m_details);
     m_total = addDetail(grid, "Total", m_details);
     m_items = addDetail(grid, "Items", m_details);
@@ -232,6 +240,7 @@ void OrdersPage::reload()
 
     m_access.clear();
     int waiting = 0;
+    int approved = 0;                          // approved by the manager, not edited yet
     for (const pos::Order& order : m_orders) {
         if (order.status != pos::OrderStatus::Paid)
             continue;
@@ -239,12 +248,19 @@ void OrdersPage::reload()
         m_access.insert(qs(order.id), int(access));
         if (access == pos::EditAccess::PendingApproval)
             ++waiting;
+        else if (access == pos::EditAccess::Allowed)
+            ++approved;
     }
 
     if (m_mode == OrdersMode::Manager && waiting > 0)
         m_inbox->showMessage(waiting == 1 ? QString("1 edit request is waiting for your approval.")
                                           : QString("%1 edit requests are waiting for your approval.").arg(waiting),
                              Banner::Warning, 0);
+    else if (m_mode == OrdersMode::Cashier && approved > 0)
+        m_inbox->showMessage(approved == 1
+                                 ? QString("1 order is approved for editing. Find it under Approved.")
+                                 : QString("%1 orders are approved for editing. Find them under Approved.").arg(approved),
+                             Banner::Info, 0);
     else
         m_inbox->clearMessage();
 
@@ -263,10 +279,13 @@ void OrdersPage::applyFilter()
         const QString id = qs(order.id);
         const int access = m_access.value(id, -1);
         const bool waiting = access == int(pos::EditAccess::PendingApproval);
+        const bool approved = access == int(pos::EditAccess::Allowed);
 
         if (filter == ShowOnHold && order.status != pos::OrderStatus::OnHold)
             continue;
         if (filter == ShowPaid && order.status != pos::OrderStatus::Paid)
+            continue;
+        if (filter == ShowApproved && !approved)
             continue;
         if (filter == ShowWaiting && !waiting)
             continue;
@@ -316,6 +335,13 @@ void OrdersPage::showSelected()
     m_contact->setText(order->customerContact.empty() ? QString("-") : qs(order->customerContact));
     m_when->setText(order->date.empty() ? QString("Not paid yet")
                                         : qs(order->date) + "   " + qs(order->time));
+    QString editedAt;
+    if (const auto approval = m_services.approvals().findByOrderId(order->id))
+        editedAt = qs(pos::editedAtText(*approval));
+    m_edited->setText(editedAt);
+    m_edited->setVisible(!editedAt.isEmpty());
+    m_editedCaption->setVisible(!editedAt.isEmpty());
+
     m_payment->setText(paymentText(*order));
     m_total->setText(isSettled(*order) ? formatPkr(order->paymentAmount) : QString("-"));
 
@@ -376,7 +402,8 @@ void OrdersPage::configureActions(const pos::Order& order)
         case pos::EditAccess::Allowed:
             if (can(int(Action::EditOrder))) {
                 primary("Edit order", [this, id]() { openForEdit(id); });
-                note = "The manager approved an edit. Open the order to change it.";
+                note = "The manager approved an edit. It can be done once: after you save it, "
+                       "this order cannot be edited again.";
             } else {
                 note = "An edit is approved. A cashier can open this order now.";
             }
@@ -407,6 +434,9 @@ void OrdersPage::configureActions(const pos::Order& order)
             break;
         case pos::EditAccess::Archived:
             note = "Archived orders cannot be edited.";
+            break;
+        case pos::EditAccess::AlreadyEdited:
+            note = "This order was already edited once. A paid order can only be edited one time.";
             break;
         case pos::EditAccess::NotFound:
             break;
@@ -502,7 +532,8 @@ void OrdersPage::viewBill(const QString& orderId)
         m_banner->showMessage("No bill was found for this order.", Banner::Error, 4000);
         return;
     }
-    const pos::BillOrderInfo info = pos::billOrderInfoFor(m_services.orders(), bill->getOrderId());
+    const pos::BillOrderInfo info = pos::billOrderInfoFor(m_services.orders(), bill->getOrderId(),
+                                                               &m_services.approvals());
     BillDialog dialog(*bill, info, m_services.exporter(), this);
     dialog.exec();
 }

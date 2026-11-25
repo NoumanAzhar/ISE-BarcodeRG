@@ -95,6 +95,8 @@ BillDialog::BillDialog(const pos::Bill& bill, const pos::BillOrderInfo& info,
     paperLayout->addLayout(title);
 
     paperLayout->addLayout(makePair("Date", qs(bill.getDate()) + "   " + qs(bill.getTime()), paper));
+    if (!info.editedAt.empty())
+        paperLayout->addLayout(makePair("Edit Date", qs(info.editedAt), paper));
     paperLayout->addLayout(makePair("Customer", qs(bill.getCustomerName()), paper));
     if (!info.customerContact.empty())
         paperLayout->addLayout(makePair("Phone", qs(info.customerContact), paper));

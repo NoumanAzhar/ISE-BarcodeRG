@@ -8,12 +8,11 @@
 #include "date_utils.h"
 
 #include <QDate>
+#include <QDateEdit>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QLocale>
-#include <QRegularExpression>
-#include <QRegularExpressionValidator>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
@@ -123,19 +122,34 @@ QWidget* ReportsPage::buildViewer()
 
     m_period = new NeuSegmented(QStringList{ "Day", "Week", "Month", "Year" }, m_periodBar);
     m_period->setMinimumWidth(340);
-    m_from = new NeuLineEdit(m_periodBar);
-    m_from->setPlaceholderText("From");
-    m_to = new NeuLineEdit(m_periodBar);
-    m_to->setPlaceholderText("To");
-    for (NeuLineEdit* edit : { m_from, m_to }) {
-        edit->setMaxLength(10);
-        edit->setMinimumWidth(150);
-        edit->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9-]*"), edit));
-        connect(edit, &QLineEdit::textEdited, this, &ReportsPage::onRangeEdited);
+    // Drop-down calendars: pick the dates instead of typing them. Past dates are the
+    // point of a report, so there is no minimum.
+    m_from = new QDateEdit(QDate::currentDate(), m_periodBar);
+    m_to = new QDateEdit(QDate::currentDate(), m_periodBar);
+    for (QDateEdit* edit : { m_from, m_to }) {
+        setupDateEdit(edit);
+        edit->setMinimumWidth(160);
     }
+    // the period never ends before it starts
+    connect(m_from, &QDateEdit::dateChanged, this, [this](const QDate& from) {
+        if (m_to->date() < from) {
+            const QSignalBlocker blocker(m_to);
+            m_to->setDate(from);
+        }
+        onRangeEdited();
+    });
+    connect(m_to, &QDateEdit::dateChanged, this, [this](const QDate& to) {
+        if (m_from->date() > to) {
+            const QSignalBlocker blocker(m_from);
+            m_from->setDate(to);
+        }
+        onRangeEdited();
+    });
     bar->addWidget(m_period);
     bar->addStretch(1);
+    bar->addWidget(makeLabel("From", "muted", m_periodBar));
     bar->addWidget(m_from);
+    bar->addWidget(makeLabel("To", "muted", m_periodBar));
     bar->addWidget(m_to);
 
     m_table = new DataTable(card);
@@ -168,7 +182,8 @@ bool ReportsPage::usesRange(int index) const
 
 pos::DateRange ReportsPage::range() const
 {
-    return pos::DateRange{ ss(m_from->text().trimmed()), ss(m_to->text().trimmed()) };
+    return pos::DateRange{ ss(m_from->date().toString(Qt::ISODate)),
+                           ss(m_to->date().toString(Qt::ISODate)) };
 }
 
 void ReportsPage::fillPeriod(int periodIndex)
@@ -181,22 +196,19 @@ void ReportsPage::fillPeriod(int periodIndex)
     default:     break;
     }
     const pos::DateRange r = pos::rangeFor(period, ss(todayIso()));
-    m_from->setText(qs(r.from));
-    m_to->setText(qs(r.to));
-    m_from->setState(QString());
-    m_to->setState(QString());
+    {
+        const QSignalBlocker fromBlocker(m_from);       // refresh once, below
+        const QSignalBlocker toBlocker(m_to);
+        m_from->setDate(QDate::fromString(qs(r.from), Qt::ISODate));
+        m_to->setDate(QDate::fromString(qs(r.to), Qt::ISODate));
+    }
     if (usesRange(m_current))
         showReport(m_current);
 }
 
 void ReportsPage::onRangeEdited()
 {
-    const pos::DateRange r = range();
-    const bool fromOk = pos::isValidDate(r.from);
-    const bool toOk = pos::isValidDate(r.to);
-    m_from->setState(m_from->text().length() == 10 ? (fromOk ? "valid" : "invalid") : "");
-    m_to->setState(m_to->text().length() == 10 ? (toOk ? "valid" : "invalid") : "");
-    if (fromOk && toOk && r.from <= r.to && usesRange(m_current))
+    if (usesRange(m_current))
         showReport(m_current);
 }
 

@@ -46,6 +46,12 @@ namespace pos {
             return percent > 0 && percent <= 100;   // false for NaN as well
         }
 
+        // A NEW season is held to the lower cap; lines already in the file (up to 100) still load.
+        bool newPercentAllowed(double percent)
+        {
+            return percent > 0 && percent <= kMaxSeasonPercent;
+        }
+
         // One Seasons.txt record -> Season; false (and a reason) if it is not valid.
         bool toSeason(const Record& r, Season& season, std::string& problem)
         {
@@ -159,8 +165,10 @@ namespace pos {
             return fail(SeasonError::BadDate, "Start and end must be real dates like 2026-12-20.");
         if (daysBetween(season.startDate, season.endDate) < 0)
             return fail(SeasonError::EndBeforeStart, "The end date is before the start date.");
-        if (!percentInRange(season.percent))
-            return fail(SeasonError::BadPercent, "The discount must be more than 0 and at most 100 percent.");
+        if (!newPercentAllowed(season.percent))
+            return fail(SeasonError::BadPercent,
+                        "The discount must be more than 0 and at most " +
+                        std::to_string(int(kMaxSeasonPercent)) + " percent.");
 
         for (const Season& existing : repo_.all()) {
             if (existing.startDate == season.startDate && existing.endDate == season.endDate &&

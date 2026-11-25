@@ -102,6 +102,8 @@ namespace pos {
             if (!info.paymentMode.empty())
                 add(field("Payment Mode", info.paymentMode));
             add(field("Date", bill.getDate().empty() ? "" : bill.getDate() + "  " + bill.getTime()));
+            if (!info.editedAt.empty())
+                add(field("Edit Date", info.editedAt));
             add(field("Status", upper(bill.getOrderStatus())));
             add(rule());
 
@@ -184,10 +186,17 @@ namespace pos {
         return { order.customerContact, paymentModeText(order.paymentMode, order.paymentMerchant) };
     }
 
-    BillOrderInfo billOrderInfoFor(const IOrderRepository& orders, const std::string& orderId)
+    BillOrderInfo billOrderInfoFor(const IOrderRepository& orders, const std::string& orderId,
+                                   const IApprovalRepository* approvals)
     {
         const std::optional<Order> order = orders.findById(orderId);
-        return order ? billOrderInfo(*order) : BillOrderInfo();
+        BillOrderInfo info = order ? billOrderInfo(*order) : BillOrderInfo();
+        if (approvals) {
+            const std::optional<Approval> approval = approvals->findByOrderId(orderId);
+            if (approval)
+                info.editedAt = editedAtText(*approval);
+        }
+        return info;
     }
 
     std::string formatBill(const Bill& bill, const BillOrderInfo& info)
@@ -209,8 +218,8 @@ namespace pos {
 
     // ---------------- PdfBillExporter ----------------
 
-    PdfBillExporter::PdfBillExporter(const IOrderRepository* orders)
-        : orders_(orders)
+    PdfBillExporter::PdfBillExporter(const IOrderRepository* orders, const IApprovalRepository* approvals)
+        : orders_(orders), approvals_(approvals)
     {
     }
 
@@ -218,7 +227,7 @@ namespace pos {
     {
         BillOrderInfo info;
         if (orders_)
-            info = billOrderInfoFor(*orders_, bill.getOrderId());
+            info = billOrderInfoFor(*orders_, bill.getOrderId(), approvals_);
         const std::vector<Line> lines = billLines(bill, info);
 
         int height = 2 * kMargin + static_cast<int>(lines.size()) * kLeading;

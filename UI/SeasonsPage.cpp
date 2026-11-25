@@ -7,6 +7,7 @@
 #include "Widgets.h"
 
 #include <QDate>
+#include <QDateEdit>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLocale>
@@ -62,7 +63,7 @@ SeasonsPage::SeasonsPage(pos::AppServices& services, QWidget* parent)
         { "From", DataTable::Align::Left, false },
         { "To", DataTable::Align::Left, false },
         { "Discount", DataTable::Align::Right, false },
-        { "Status", DataTable::Align::Left, true },
+        { "Status", DataTable::Align::Center, true },
     });
     m_table->setEmptyText("No discount seasons yet.\nAdd one on the right.");
 
@@ -82,21 +83,24 @@ QWidget* SeasonsPage::buildSide()
     layout->setContentsMargins(20, 18, 20, 18);
     layout->setSpacing(6);
 
-    m_from = new NeuLineEdit(card);
-    m_from->setPlaceholderText("yyyy-mm-dd");
-    m_to = new NeuLineEdit(card);
-    m_to->setPlaceholderText("yyyy-mm-dd");
-    for (NeuLineEdit* edit : { m_from, m_to }) {
-        edit->setMaxLength(10);
-        edit->setValidator(new QRegularExpressionValidator(QRegularExpression("[0-9-]*"), edit));
-        connect(edit, &QLineEdit::textChanged, this, [edit]() { edit->setState(QString()); });
-        connect(edit, &QLineEdit::returnPressed, this, &SeasonsPage::addSeason);
+    // Drop-down calendars: pick the dates instead of typing them.
+    m_from = new QDateEdit(QDate::currentDate(), card);
+    m_to = new QDateEdit(QDate::currentDate(), card);
+    for (QDateEdit* edit : { m_from, m_to }) {
+        setupDateEdit(edit);
+        edit->setMinimumDate(QDate::currentDate());
+        edit->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     }
+    // the end can never be before the start
+    connect(m_from, &QDateEdit::dateChanged, this, [this](const QDate& start) {
+        m_to->setMinimumDate(start);
+    });
 
     m_percent = new NeuLineEdit(card);
-    m_percent->setPlaceholderText("e.g. 10");
+    m_percent->setPlaceholderText(QStringLiteral("up to %1")
+                                      .arg(QLocale::c().toString(pos::kMaxSeasonPercent, 'f', 0)));
     m_percent->setValidator(new QRegularExpressionValidator(
-        QRegularExpression("[0-9]{0,3}([.][0-9]{0,2})?"), m_percent));
+        QRegularExpression("[0-9]{0,2}([.][0-9]{0,2})?"), m_percent));
     connect(m_percent, &QLineEdit::textChanged, this, [this]() { m_percent->setState(QString()); });
     connect(m_percent, &QLineEdit::returnPressed, this, &SeasonsPage::addSeason);
 
@@ -108,12 +112,6 @@ QWidget* SeasonsPage::buildSide()
     auto* addBtn = new NeuButton("Add season", NeuButton::Variant::Primary, card);
     addBtn->setDefault(true);
     connect(addBtn, &NeuButton::clicked, this, &SeasonsPage::addSeason);
-
-    auto* hint = makeLabel("A season takes the percentage off every bill made from its start date "
-                           "to its end date, both included. If seasons overlap, the highest "
-                           "percentage applies; they are not added together.",
-                           "muted", card);
-    hint->setWordWrap(true);
 
     // ---- the selected season: switch it on or off
     m_selectedBox = new QWidget(card);
@@ -132,9 +130,9 @@ QWidget* SeasonsPage::buildSide()
 
     layout->addWidget(makeLabel("NEW SEASON", "sectionTitle", card));
     layout->addLayout(dates);
-    layout->addWidget(makeField("Discount (%)", m_percent, card));
-    layout->addSpacing(2);
-    layout->addWidget(hint);
+    layout->addWidget(makeField(QStringLiteral("Discount (%, max %1)")
+                                    .arg(QLocale::c().toString(pos::kMaxSeasonPercent, 'f', 0)),
+                                m_percent, card));
     layout->addStretch(1);
     layout->addWidget(m_selectedBox);
     layout->addWidget(m_banner);
@@ -149,12 +147,17 @@ void SeasonsPage::onActivated()
     reload();
 }
 
+void SeasonsPage::clearForm()
+{
+    m_from->setDate(QDate::currentDate());
+    m_to->setDate(m_from->date());
+    m_percent->clear();
+    m_percent->setState(QString());
+}
+
 void SeasonsPage::resetState()
 {
-    for (NeuLineEdit* edit : { m_from, m_to, m_percent }) {
-        edit->clear();
-        edit->setState(QString());
-    }
+    clearForm();
     m_banner->clearMessage();
     m_table->clearSelection();
 }
@@ -210,40 +213,26 @@ void SeasonsPage::showSelected()
 
 void SeasonsPage::addSeason()
 {
-    for (NeuLineEdit* edit : { m_from, m_to, m_percent })
-        edit->setState(QString());
+    m_percent->setState(QString());
 
     bool ok = false;
     const double percent = QLocale::c().toDouble(m_percent->text().trimmed(), &ok);
 
     pos::Season season;
-    season.startDate = ss(m_from->text().trimmed());
-    season.endDate = ss(m_to->text().trimmed());
+    season.startDate = ss(m_from->date().toString(Qt::ISODate));
+    season.endDate = ss(m_to->date().toString(Qt::ISODate));
     season.percent = ok ? percent : 0.0;
     season.active = true;
 
     const pos::SeasonResult result = m_services.seasons().add(season);
     if (!result.ok()) {
-        switch (result.error) {
-        case pos::SeasonError::BadDate:
-            (m_from->text().trimmed().length() != 10 ? m_from : m_to)->setState("invalid");
-            break;
-        case pos::SeasonError::EndBeforeStart:
-            m_to->setState("invalid");
-            break;
-        case pos::SeasonError::BadPercent:
+        if (result.error == pos::SeasonError::BadPercent)
             m_percent->setState("invalid");
-            break;
-        default:
-            break;
-        }
         m_banner->showMessage(qs(result.message), Banner::Error, 4500);
         return;
     }
 
-    m_from->clear();
-    m_to->clear();
-    m_percent->clear();
+    clearForm();
     reload();
     m_banner->showMessage(QStringLiteral("Season added: %1 off from %2 to %3.")
                               .arg(percentText(season.percent), dateText(season.startDate),

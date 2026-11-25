@@ -23,6 +23,7 @@ namespace pos {
 	inline constexpr int    kCategoryIdDigits = 2;    // ids 10..99 (a barcode cannot start with 0)
 	inline constexpr int    kBarcodeSerialDigits = 4;    // barcode = category id + 4-digit serial
 	inline constexpr double kMaxSpecialPercent = 8.0;  // special discount cap
+	inline constexpr double kMaxSeasonPercent = 50.0;  // cap for a newly added seasonal discount
 	inline constexpr int    kEditWindowDays = 7;    // paid order edit window
 	inline constexpr int    kTopN = 10;   // size of the top-sold / top-remaining reports
 
