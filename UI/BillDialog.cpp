@@ -67,7 +67,8 @@ QString negative(double amount)
 
 } // namespace
 
-BillDialog::BillDialog(const pos::Bill& bill, pos::IBillExporter& exporter, QWidget* parent)
+BillDialog::BillDialog(const pos::Bill& bill, const pos::BillOrderInfo& info,
+                       pos::IBillExporter& exporter, QWidget* parent)
     : QDialog(parent), m_bill(bill), m_exporter(exporter)
 {
     setWindowTitle("Bill");
@@ -95,7 +96,11 @@ BillDialog::BillDialog(const pos::Bill& bill, pos::IBillExporter& exporter, QWid
 
     paperLayout->addLayout(makePair("Date", qs(bill.getDate()) + "   " + qs(bill.getTime()), paper));
     paperLayout->addLayout(makePair("Customer", qs(bill.getCustomerName()), paper));
+    if (!info.customerContact.empty())
+        paperLayout->addLayout(makePair("Phone", qs(info.customerContact), paper));
     paperLayout->addLayout(makePair("Order", qs(bill.getOrderId()), paper));
+    if (!info.paymentMode.empty())
+        paperLayout->addLayout(makePair("Payment Mode", qs(info.paymentMode), paper));
     paperLayout->addLayout(makePair("Status", qs(bill.getOrderStatus()).toUpper(), paper));
     paperLayout->addSpacing(4);
     paperLayout->addWidget(makeRule(paper));

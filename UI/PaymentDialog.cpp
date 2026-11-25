@@ -1,5 +1,6 @@
 #include "PaymentDialog.h"
 
+#include "CheckoutService.h"
 #include "Data_Files.h"
 #include "Format.h"
 #include "Neu.h"
@@ -26,11 +27,6 @@ const QStringList kBanks = { "Meezan Bank", "HBL", "MCB", "UBL", "ABL" };
 const QStringList kWallets = { "JazzCash", "EasyPaisa", "NayaPay" };
 
 constexpr double kCent = 0.005;       // amounts are compared to the nearest paisa
-
-QString plainAmount(double amount)
-{
-    return QLocale::c().toString(amount, 'f', 2);
-}
 
 } // namespace
 
@@ -181,9 +177,7 @@ double PaymentDialog::amountReceived() const
         return 0.0;                               // card and wallet pay exactly
     bool ok = false;
     const double received = QLocale::c().toDouble(m_received->text().trimmed(), &ok);
-    if (!ok || std::abs(received - payable()) < kCent)
-        return 0.0;                               // 0 = exactly the amount to pay
-    return received;
+    return ok ? received : 0.0;
 }
 
 // ------------------------------------------------------------------ screen
@@ -217,7 +211,8 @@ void PaymentDialog::refresh()
     // The received field follows the amount to pay until the cashier types in it.
     if (isCash() && !m_receivedEdited) {
         const QSignalBlocker blocker(m_received);
-        m_received->setText(plainAmount(toPay));
+        // Cash is taken in whole notes (smallest note PKR 10); the rest is change.
+        m_received->setText(QLocale::c().toString(pos::cashToCollect(toPay), 'f', 0));
     }
 
     bool enoughCash = true;
