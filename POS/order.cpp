@@ -164,16 +164,35 @@ namespace pos {
 			return o;
 		}
 
-		// OrderDetail.txt: one row per item: orderId productId barcode quantity
-			vector<Record> itemsToRecords(const Order& order)
-			{
-				vector<Record> rows;
-				for (const OrderItem& item : order.items)
-					rows.push_back({ order.id, item.productId, item.barcode, formatQuantity(item.quantity) });
-				return rows;
+		// One OrderDetail.txt row: the order id, then productId barcode quantity
+		// for every item, e.g. 00012314 1001 123456 2 1002 654321 1
+		Record itemsToRecord(const Order& order)
+		{
+			Record row;
+			row.push_back(order.id);
+			for (const OrderItem& item : order.items) {
+				row.push_back(item.productId);
+				row.push_back(item.barcode);
+				row.push_back(formatQuantity(item.quantity));
 			}
-
+			return row;
 		}
+
+		// Reverse of itemsToRecord. Returns no items if the row is malformed.
+		vector<OrderItem> recordToItems(const Record& r)
+		{
+			vector<OrderItem> items;
+			if (r.size() < 4 || (r.size() - 1) % 3 != 0) return items;
+
+			for (size_t i = 1; i < r.size(); i += 3) {
+				double quantity = 0;
+				if (!parseDouble(r[i + 2], quantity)) return {};
+				items.push_back(OrderItem{ r[i], r[i + 1], quantity });
+			}
+			return items;
+		}
+
+	}
 
 	FileOrderRepository::FileOrderRepository(string orderFile, string detailFile)
 		: orderFile_(move(orderFile)), detailFile_(move(detailFile))
@@ -199,7 +218,7 @@ namespace pos {
 		for (const Record& row : readRecords(detailFile_)) {
 			if (row.empty() || row[0] != order.id) details.push_back(row);
 		}
-		for (const Record& row : itemsToRecords(order)) details.push_back(row);
+		if (!order.items.empty()) details.push_back(itemsToRecord(order));
 
 		// details first, so an order line never exists without its items
 		return writeRecords(detailFile_, details) && writeRecords(orderFile_, orders);
@@ -209,9 +228,7 @@ namespace pos {
 	{
 		map<string, vector<OrderItem>> itemsByOrder;
 		for (const Record& row : readRecords(detailFile_)) {
-			double quantity = 0;
-				if (row.size() != 4 || !parseDouble(row[3], quantity)) continue;
-				itemsByOrder[row[0]].push_back(OrderItem{ row[1], row[2], quantity });
+			if (!row.empty()) itemsByOrder[row[0]] = recordToItems(row);
 		}
 
 		vector<Order> result;
