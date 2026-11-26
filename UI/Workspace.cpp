@@ -49,6 +49,12 @@ public:
         repolish(m_label);
     }
 
+    void setLabel(const QString& text)
+    {
+        m_label->setText(text);
+        setToolTip(text);
+    }
+
 private:
     IconWidget* m_icon = nullptr;
     QLabel* m_label = nullptr;
@@ -106,6 +112,8 @@ void Workspace::addPage(const QString& title, IconWidget::Kind icon, PageBase* p
 
     connect(item, &NeuFrame::clicked, this, [this, index]() { select(index); });
     connect(page, &PageBase::openPageRequested, this, &Workspace::showPage);
+    connect(page, &PageBase::displayTitleChanged, this,
+            [this, page](const QString& shown) { setDisplayTitle(page, shown); });
 
     if (index < 9) {
         auto* shortcut = new QShortcut(QKeySequence(QKeyCombination(Qt::ControlModifier, static_cast<Qt::Key>(Qt::Key_1 + index))), this);
@@ -129,10 +137,26 @@ void Workspace::select(int index)
 
     m_current = index;
     m_entries[index].item->setSelected(true);
-    m_header->setTitle(m_entries[index].title);
+    const Entry& chosen = m_entries[index];
+    m_header->setTitle(chosen.displayTitle.isEmpty() ? chosen.title : chosen.displayTitle);
     m_stack->setCurrentWidget(m_entries[index].page);
     if (isVisible())
         m_entries[index].page->onActivated();
+}
+
+void Workspace::setDisplayTitle(PageBase* page, const QString& shown)
+{
+    for (int i = 0; i < int(m_entries.size()); ++i) {
+        Entry& entry = m_entries[i];
+        if (entry.page != page)
+            continue;
+        entry.displayTitle = shown;
+        const QString text = shown.isEmpty() ? entry.title : shown;
+        entry.item->setLabel(text);
+        if (i == m_current)
+            m_header->setTitle(text);
+        return;
+    }
 }
 
 void Workspace::showPage(const QString& title)

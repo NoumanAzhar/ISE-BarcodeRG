@@ -92,9 +92,15 @@ namespace pos {
         return true;
     }
 
+    bool OrderService::wouldEmptyPaidOrder(const string& productId) const {
+        return !order_.id.empty() && order_.status == OrderStatus::Paid
+            && order_.items.size() == 1 && order_.items.front().productId == productId;
+    }
+
     bool OrderService::removeItem(const string& productId) {
         auto it = findItem(productId);
         if (it == order_.items.end()) return false;
+        if (wouldEmptyPaidOrder(productId)) return false;                 // store policy
         order_.items.erase(it);
         return true;
     }

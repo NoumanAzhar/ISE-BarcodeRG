@@ -19,6 +19,7 @@ class OrderPage : public PageBase {
     Q_OBJECT
 public:
     static constexpr const char* kTitle = "New Order";   // the rail item that shows this page
+    static constexpr const char* kEditTitle = "Edit Order";   // shown instead while a paid order is edited
 
     OrderPage(pos::AppServices& services, QWidget* parent = nullptr);
 
@@ -38,6 +39,7 @@ private:
     void onCameraScanned(const QString& digits);
     void showDescription();
     void clearItems();
+    void discardEditChanges();      // paid order: back to the saved items
     void holdOrder();
     void showHoldList();
     void syncMode();                // title, buttons and fields follow the draft (new, resumed, edited)
@@ -62,6 +64,7 @@ private:
     NeuButton* m_clearBtn = nullptr;
     QLabel* m_seasonKey = nullptr;
     QLabel* m_season = nullptr;
+    QString m_displayTitle;         // last title announced with displayTitleChanged()
     QString m_shownOrderId;         // the draft whose customer was last copied into the fields
     NeuLineEdit* m_name = nullptr;
     NeuLineEdit* m_contact = nullptr;

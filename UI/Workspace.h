@@ -31,6 +31,7 @@ public:
 
 private:
     void select(int index);
+    void setDisplayTitle(PageBase* page, const QString& title);
 
     QString m_roleName;
     QWidget* m_rail = nullptr;
@@ -42,6 +43,7 @@ private:
         QString title;
         RailItem* item;
         PageBase* page;
+        QString displayTitle;      // empty: the normal title is shown
     };
     std::vector<Entry> m_entries;
     int m_current = -1;

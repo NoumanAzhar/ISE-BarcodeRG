@@ -28,6 +28,8 @@ enum class OrdersMode { Cashier, Manager };
 class OrdersPage : public PageBase {
     Q_OBJECT
 public:
+    static constexpr const char* kTitle = "Orders";   // the rail item that shows this page
+
     OrdersPage(pos::AppServices& services, OrdersMode mode, QWidget* parent = nullptr);
 
     void onActivated() override;       // orders change after every sale

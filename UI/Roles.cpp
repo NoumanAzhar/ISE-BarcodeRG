@@ -34,7 +34,7 @@ Workspace* buildCashier(pos::AppServices& services, QWidget* parent)
     auto* workspace = new Workspace("Cashier", parent);
     addIfAllowed(workspace, Role::Cashier, Action::RecordOrder, OrderPage::kTitle, IconWidget::Order,
                  [&] { return new OrderPage(services); });
-    addIfAllowed(workspace, Role::Cashier, Action::EditOrder, "Orders", IconWidget::Orders,
+    addIfAllowed(workspace, Role::Cashier, Action::EditOrder, OrdersPage::kTitle, IconWidget::Orders,
                  [&] { return new OrdersPage(services, OrdersMode::Cashier); });
     addIfAllowed(workspace, Role::Cashier, Action::ViewProduct, "Scan Product", IconWidget::Scan,
                  [&] { return new ReadPage(services, ReadMode::CameraOnly); });
@@ -51,7 +51,7 @@ Workspace* buildManager(pos::AppServices& services, QWidget* parent)
                  [&] { return new InventoryPage(services); });
     addIfAllowed(workspace, Role::Manager, Action::ManageCategories, "Categories", IconWidget::Categories,
                  [&] { return new CategoriesPage(services); });
-    addIfAllowed(workspace, Role::Manager, Action::ApproveEdit, "Orders", IconWidget::Orders,
+    addIfAllowed(workspace, Role::Manager, Action::ApproveEdit, OrdersPage::kTitle, IconWidget::Orders,
                  [&] { return new OrdersPage(services, OrdersMode::Manager); });
     addIfAllowed(workspace, Role::Manager, Action::ManageSeasons, "Discounts", IconWidget::Discount,
                  [&] { return new SeasonsPage(services); });

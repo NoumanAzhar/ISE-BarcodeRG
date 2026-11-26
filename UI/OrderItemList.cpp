@@ -293,6 +293,10 @@ void OrderItemList::commit(const QString& id, double quantity)
 
 void OrderItemList::remove(const QString& id)
 {
+    if (m_services.order().wouldEmptyPaidOrder(ss(id))) {
+        emit lastItemProtected();                // the page explains the store policy
+        return;
+    }
     if (!m_services.order().removeItem(ss(id)))
         return;
     refresh();                                   // also clears the selection if it was this row

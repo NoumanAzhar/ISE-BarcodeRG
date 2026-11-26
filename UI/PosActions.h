@@ -36,4 +36,12 @@ Result resumeHeld(pos::AppServices& services, const QString& orderId);
 // Opens a paid order for editing, if the edit rules allow it right now.
 Result openForEdit(pos::AppServices& services, const QString& orderId);
 
+// True while a paid order is being edited and nothing has been changed yet (same items and
+// same customer as saved), so the cashier can leave without being asked anything.
+bool isEditUnchanged(pos::AppServices& services, const QString& name, const QString& contact);
+
+// Throws away the changes made while editing a paid order: the draft goes back to the order
+// as it was saved (same items, same customer) and stays open for editing.
+Result revertEdit(pos::AppServices& services);
+
 } // namespace PosActions
