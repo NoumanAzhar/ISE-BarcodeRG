@@ -11,7 +11,7 @@ namespace pos {
 
         bool isCompleted(const Order& order)
         {
-            return order.status == OrderStatus::Paid || order.status == OrderStatus::Archived;
+            return order.status == OrderStatus::Paid;
         }
 
         using BillsByOrder = std::map<std::string, Bill>;

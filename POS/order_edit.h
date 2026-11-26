@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -49,7 +48,7 @@ namespace pos {
     };
 
     // ---- Layer 3: rules ----
-    enum class EditAccess { Allowed, NeedsApproval, PendingApproval, Rejected, Expired, Archived, NotFound, AlreadyEdited };
+    enum class EditAccess { Allowed, NeedsApproval, PendingApproval, Rejected, Expired, NotFound, AlreadyEdited };
 
     struct EditCheck {
         EditAccess access = EditAccess::NotFound;
@@ -71,7 +70,7 @@ namespace pos {
     public:
         OrderEditService(IOrderRepository& orders, IApprovalRepository& approvals, const IClock& clock);
 
-        // on hold or in progress: Allowed; archived: never;
+        // on hold or in progress: Allowed;
         // paid: within kEditWindowDays of the order date (day 7 is still allowed) AND approved,
         // and only once: after the edit is saved the order is AlreadyEdited.
         EditCheck check(const std::string& orderId) const override;
@@ -81,18 +80,11 @@ namespace pos {
         std::vector<Approval> pending() const;               // manager
         bool approve(const std::string& orderId);            // manager: needs a pending request
         bool reject(const std::string& orderId);             // manager: needs a pending request
-        bool archive(const std::string& orderId);            // manager: paid -> archived
-
-        // Called after an order changes status here (archive), so other records that copy
-        // the status (the bill) can follow without this class knowing about them.
-        using StatusHandler = std::function<void(const Order&)>;
-        void setStatusHandler(StatusHandler handler);
 
     private:
         IOrderRepository& orders_;
         IApprovalRepository& approvals_;
         const IClock& clock_;
-        StatusHandler onStatus_;
     };
 
 } // namespace pos

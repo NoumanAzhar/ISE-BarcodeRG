@@ -42,8 +42,6 @@ StatusInfo statusOf(const pos::Order& order, int access)
         return { "On hold", DataTable::Tone::Warn, "warning" };
     case pos::OrderStatus::InProgress:
         return { "In progress", DataTable::Tone::Muted, "info" };
-    case pos::OrderStatus::Archived:
-        return { "Archived", DataTable::Tone::Muted, "info" };
     case pos::OrderStatus::Paid:
         break;
     }
@@ -58,7 +56,7 @@ StatusInfo statusOf(const pos::Order& order, int access)
 
 bool isSettled(const pos::Order& order)
 {
-    return order.status == pos::OrderStatus::Paid || order.status == pos::OrderStatus::Archived;
+    return order.status == pos::OrderStatus::Paid;
 }
 
 QString paymentText(const pos::Order& order)
@@ -392,10 +390,6 @@ void OrdersPage::configureActions(const pos::Order& order)
             note = "This order is on hold. A cashier can resume it.";
         break;
 
-    case pos::OrderStatus::Archived:
-        note = "Archived orders cannot be edited.";
-        break;
-
     case pos::OrderStatus::Paid: {
         const auto access = static_cast<pos::EditAccess>(m_access.value(id, int(pos::EditAccess::NotFound)));
         switch (access) {
@@ -432,19 +426,12 @@ void OrdersPage::configureActions(const pos::Order& order)
         case pos::EditAccess::Expired:
             note = QString("The %1-day editing window has passed.").arg(pos::kEditWindowDays);
             break;
-        case pos::EditAccess::Archived:
-            note = "Archived orders cannot be edited.";
-            break;
         case pos::EditAccess::AlreadyEdited:
             note = "This order was already edited once. A paid order can only be edited one time.";
             break;
         case pos::EditAccess::NotFound:
             break;
         }
-
-        // The manager can archive a paid order unless an edit request is waiting.
-        if (can(int(Action::ApproveEdit)) && access != pos::EditAccess::PendingApproval)
-            second("Archive order", [this, id]() { archive(id); });
         break;
     }
     }
@@ -501,28 +488,6 @@ void OrdersPage::decide(const QString& orderId, bool approve)
     m_banner->showMessage(approve ? "Edit approved. The cashier can open the order now."
                                   : "Edit declined.",
                           Banner::Success, 4000);
-}
-
-void OrdersPage::archive(const QString& orderId)
-{
-    QMessageBox box(this);
-    box.setIcon(QMessageBox::Question);
-    box.setWindowTitle("Archive order");
-    box.setText(QString("Archive order %1?").arg(orderId));
-    box.setInformativeText("An archived order can never be edited again.");
-    QPushButton* confirm = box.addButton("Archive", QMessageBox::DestructiveRole);
-    QPushButton* cancel = box.addButton("Cancel", QMessageBox::RejectRole);
-    box.setDefaultButton(cancel);
-    box.exec();
-    if (box.clickedButton() != confirm)
-        return;
-
-    if (!m_services.orderEdit().archive(ss(orderId))) {
-        m_banner->showMessage("The order could not be archived.", Banner::Error, 4000);
-        return;
-    }
-    reload();
-    m_banner->showMessage("Order archived.", Banner::Success, 3500);
 }
 
 void OrdersPage::viewBill(const QString& orderId)

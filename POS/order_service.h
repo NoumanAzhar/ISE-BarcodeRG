@@ -33,7 +33,6 @@ namespace pos {
         const Order& current() const;
 
         // Opens a saved order (on hold, in progress or paid) as the draft. Keeps its id.
-        // false for an archived order (never editable); the draft is left unchanged.
         bool load(const Order& order);
 
     private:
@@ -55,7 +54,7 @@ namespace pos {
         // Saves the draft as OnHold and returns its id. No customer name needed
         // (stored as "Walk-in"). The id is assigned now and kept. No stock is reserved.
         // After a successful hold the draft is cleared so the cashier can scan the next customer.
-        // nullopt if the draft has no items, is already paid/archived, or the save fails.
+        // nullopt if the draft has no items, is already paid, or the save fails.
         std::optional<std::string> hold();
 
         // An on-hold order becomes the draft. false if not found or not on hold.

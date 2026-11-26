@@ -44,15 +44,6 @@ namespace pos {
         ensureDataFolders();
         products_.assignIDs();
         startupReport_ = assigner_.assignAll();
-
-        // An archived order must show as archived on its bill too.
-        orderEdit_.setStatusHandler([this](const Order& order) {
-            std::optional<Bill> bill = bills_.findByOrderId(order.id);
-            if (!bill)
-                return;
-            bill->setOrderStatus(toString(order.status));
-            bills_.replace(*bill);
-        });
     }
 
 } // namespace pos

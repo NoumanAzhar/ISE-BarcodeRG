@@ -25,9 +25,9 @@ namespace pos {
             const IBillRepository& bills,
             const IProductRepository& products);
 
-        // Orders that are not paid or archived, with the total amount of all of them.
+        // Orders that are not paid, with the total amount of all of them.
         ReportTable incompleteOrders() const;
-        // Paid or archived orders, with the total amount of their bills.
+        // Paid orders, with the total amount of their bills.
         ReportTable completedOrders() const;
         // Completed orders paid in cash on a date inside the range, with the total.
         ReportTable cashSales(const DateRange& range) const;

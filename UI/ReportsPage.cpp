@@ -30,8 +30,8 @@ struct ReportInfo {
 enum Report { Incomplete, Completed, CashSales, AllSales, BestSellers, MostInStock };
 
 const ReportInfo kReports[] = {
-    { "Incomplete orders", "Orders that are not paid or archived yet.", false },
-    { "Completed orders", "Paid and archived orders.", false },
+    { "Incomplete orders", "Orders that are not paid yet.", false },
+    { "Completed orders", "Orders that are paid.", false },
     { "Cash sales", "Payments made in cash during the period.", true },
     { "All sales", "Every sale in the period, with its discounts.", true },
     { "Best sellers", "The items sold the most, with what is left on the shelf.", false },

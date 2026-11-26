@@ -51,7 +51,7 @@ public:
 	const std::string& getDate() const;
 	const std::string& getTime() const;
 	const std::string& getOrderStatus() const;
-	//Setter: the bill status follows the order status (e.g. paid -> archived)
+	//Setter: the bill status follows the order status (e.g. in-progress -> paid)
 	void setOrderStatus(const std::string& status);
 };
 } // namespace pos

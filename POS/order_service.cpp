@@ -110,7 +110,6 @@ namespace pos {
     const Order& OrderService::current() const { return order_; }
 
     bool OrderService::load(const Order& order) {
-        if (order.status == OrderStatus::Archived) return false;
         order_ = order;
         paidQty_.clear();
         if (order.status == OrderStatus::Paid)
@@ -127,7 +126,7 @@ namespace pos {
     optional<string> OrderHoldService::hold() {
         Order order = draft_.current();
         if (order.items.empty()) return nullopt;
-        if (order.status == OrderStatus::Paid || order.status == OrderStatus::Archived) return nullopt;
+        if (order.status == OrderStatus::Paid) return nullopt;
 
         if (order.id.empty()) {
             int highest = 0;

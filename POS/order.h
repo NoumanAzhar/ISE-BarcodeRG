@@ -6,7 +6,7 @@
 
 namespace pos {
 
-    enum class OrderStatus { InProgress, OnHold, Paid, Archived };
+    enum class OrderStatus { InProgress, OnHold, Paid };
     enum class PaymentMode { None, Cash, Card, Wallet };
 
     struct OrderItem {

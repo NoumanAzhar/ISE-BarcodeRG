@@ -22,7 +22,7 @@ class QWidget;
 
 // Cashier: look up saved orders, resume held ones, edit paid ones (within the
 // edit window and after approval) and view bills.
-// Manager: approve or decline edit requests, archive orders and view bills.
+// Manager: approve or decline edit requests and view bills.
 enum class OrdersMode { Cashier, Manager };
 
 class OrdersPage : public PageBase {
@@ -50,7 +50,6 @@ private:
     void openForEdit(const QString& orderId);
     void requestApproval(const QString& orderId);
     void decide(const QString& orderId, bool approve);
-    void archive(const QString& orderId);
     void viewBill(const QString& orderId);
 
     pos::AppServices& m_services;

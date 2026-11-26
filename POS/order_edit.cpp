@@ -150,8 +150,6 @@ namespace pos {
         case OrderStatus::InProgress:
         case OrderStatus::OnHold:
             return { EditAccess::Allowed, "" };
-        case OrderStatus::Archived:
-            return { EditAccess::Archived, "Archived orders cannot be edited." };
         case OrderStatus::Paid:
             break;
         }
@@ -241,24 +239,6 @@ namespace pos {
         a->decisionDate = clock_.date();
         a->decisionTime = clock_.time();
         return approvals_.save(*a);
-    }
-
-    bool OrderEditService::archive(const string& orderId)
-    {
-        optional<Order> order = orders_.findById(orderId);
-        if (!order || order->status != OrderStatus::Paid)
-            return false;
-        order->status = OrderStatus::Archived;
-        if (!orders_.save(*order))
-            return false;
-        if (onStatus_)
-            onStatus_(*order);
-        return true;
-    }
-
-    void OrderEditService::setStatusHandler(StatusHandler handler)
-    {
-        onStatus_ = std::move(handler);
     }
 
 } // namespace pos

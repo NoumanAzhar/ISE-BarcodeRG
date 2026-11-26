@@ -18,8 +18,6 @@ namespace pos {
 			return "on-hold";
 		case OrderStatus::Paid:
 			return "paid";
-		case OrderStatus::Archived:
-			return "archived";
 		}
 		return "in-progress";
 	}
@@ -31,8 +29,8 @@ namespace pos {
 			return OrderStatus::OnHold;
 		else if (text == "paid")
 			return OrderStatus::Paid;
-		else if (text == "archived")
-			return OrderStatus::Archived;
+		else if (text == "archived")      // old files: the archive feature was removed
+			return OrderStatus::Paid;
 		else
 			return nullopt;
 	}
