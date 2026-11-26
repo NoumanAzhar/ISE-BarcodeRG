@@ -8,8 +8,10 @@
 #include "OrderItemList.h"
 #include "HoldListDialog.h"
 #include "OrderTotals.h"
+#include "OrdersPage.h"
 #include "PosActions.h"
 #include "ProductDialog.h"
+#include "StorePolicyDialog.h"
 #include "Widgets.h"
 #include "order.h"
 
@@ -229,6 +231,10 @@ QWidget* OrderPage::buildOrderCard()
             [this](const QString& id) { m_descriptionBtn->setEnabled(!id.isEmpty()); });
     connect(m_list, &OrderItemList::notice, this,
             [this](const QString& text) { m_banner->showMessage(text, Banner::Warning); });
+    connect(m_list, &OrderItemList::lastItemProtected, this, [this]() {
+        StorePolicyDialog dialog(this);
+        dialog.exec();
+    });
     connect(m_descriptionBtn, &NeuButton::clicked, this, &OrderPage::showDescription);
     connect(m_clearBtn, &NeuButton::clicked, this, &OrderPage::clearItems);
     connect(m_holdBtn, &NeuButton::clicked, this, &OrderPage::holdOrder);
@@ -284,6 +290,14 @@ bool OrderPage::canLeave()
         return true;
 
     const bool editing = PosActions::isEditingPaid(m_services);
+
+    // Opened for editing but nothing changed: just go back, no question asked.
+    if (editing && PosActions::isEditUnchanged(m_services, m_name->text().trimmed(), m_contact->text().trimmed())) {
+        m_services.order().start("");
+        resetFields();
+        refreshAll();
+        return true;
+    }
 
     QMessageBox box(this);
     box.setIcon(QMessageBox::Question);
@@ -371,12 +385,25 @@ void OrderPage::showDescription()
 void OrderPage::clearItems()
 {
     if (PosActions::isEditingPaid(m_services)) {
-        m_services.order().start("");            // drop the changes; the saved order stays as it was
-        resetFields();
-    } else {
-        m_services.order().clear();
+        discardEditChanges();
+        return;
     }
+    m_services.order().clear();
     refreshAll();
+}
+
+void OrderPage::discardEditChanges()
+{
+    const PosActions::Result result = PosActions::revertEdit(m_services);
+    if (!result.ok) {
+        m_banner->showMessage(result.message, Banner::Error, kLongMessageMs);
+        return;
+    }
+    resetFields();
+    m_shownOrderId.clear();                      // syncMode() copies the saved customer back in
+    m_list->clearSelection();
+    refreshAll();
+    m_banner->showMessage(result.message, Banner::Success, kLongMessageMs);
 }
 
 void OrderPage::holdOrder()
@@ -429,6 +456,7 @@ void OrderPage::generateBill()
         return;
     }
 
+    const bool wasEditing = PosActions::isEditingPaid(m_services);
     const bool cameraWasOn = m_camera->isActive();
     m_camera->setActive(false);
     const CheckoutFlow::Outcome outcome =
@@ -458,6 +486,9 @@ void OrderPage::generateBill()
         m_banner->showMessage(outcome.message, Banner::Error, kLongMessageMs);
         break;
     }
+
+    if (wasEditing && billGenerated)
+        emit openPageRequested(OrdersPage::kTitle);   // the edit is done: back to the order list
 }
 
 // ------------------------------------------------------------------ screen
@@ -502,6 +533,12 @@ void OrderPage::syncMode()
     else if (opened)
         title = "ORDER " + id + " (RESUMED)";
     m_title->setText(title);
+
+    const QString shownTitle = editing ? QString(kEditTitle) : QString();   // rail button and header
+    if (shownTitle != m_displayTitle) {
+        m_displayTitle = shownTitle;
+        emit displayTitleChanged(shownTitle);
+    }
     m_title->setObjectName(opened ? "cardLink" : "sectionTitle");   // accent while an order is open
     repolish(m_title);
 

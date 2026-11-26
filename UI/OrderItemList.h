@@ -32,6 +32,7 @@ signals:
     void changed();                          // quantity edited or item removed: recalculate totals
     void selectionChanged(const QString& productId);   // empty when selection cleared
     void notice(const QString& text);        // e.g. "Not enough stock (max 5)"
+    void lastItemProtected();                // tried to remove the only item of a paid order
 
 private:
     struct Row {

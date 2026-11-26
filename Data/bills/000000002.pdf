@@ -9,7 +9,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 322 396] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
 endobj
 4 0 obj
-<< /Length 1349 >>
+<< /Length 1327 >>
 stream
 BT
 12 TL
@@ -24,15 +24,17 @@ T*
 T*
 (Bill id     : 000000002) Tj
 T*
-(Order id    : 00000326) Tj
+(Order id    : 00000226) Tj
 T*
-(Customer    : Walk-in) Tj
+(Customer    : Nouman) Tj
+T*
+(Phone       : 03166076692) Tj
 T*
 (Payment Mode: Cash) Tj
 T*
-(Date        : 2026-11-26  03:05:59) Tj
+(Date        : 2026-11-26  05:31:13) Tj
 T*
-(Edit Date   : 2026-11-26  03:08:19) Tj
+(Edit Date   : 2026-11-26  05:42:35) Tj
 T*
 (Status      : PAID) Tj
 T*
@@ -42,33 +44,31 @@ T*
 (ITEM         QTY     PRICE     DISC     AMOUNT) Tj
 T*
 /F1 9 Tf
-(SALT           1     60.00     0.00      60.00) Tj
+(KITKAT         1     70.00     0.00      70.00) Tj
 T*
-(SOOPER         1     40.00     2.00      40.00) Tj
+(COCOMO         1     10.00     0.00      10.00) Tj
 T*
-(OLPERS         1    340.00    10.00     340.00) Tj
-T*
-(DALDA          1    560.00     0.00     560.00) Tj
+(SOOPER         4     40.00     8.00     160.00) Tj
 T*
 (----------------------------------------------) Tj
 T*
-(Subtotal                               1000.00) Tj
+(Subtotal                                240.00) Tj
 T*
-(Tax                                      97.00) Tj
+(Tax                                      24.00) Tj
 T*
-(Product discount                        -12.00) Tj
+(Product discount                         -8.00) Tj
 T*
-(Seasonal discount                       -54.25) Tj
+(Seasonal discount                       -12.80) Tj
 T*
 (----------------------------------------------) Tj
 T*
 /F2 9 Tf
-(PAYABLE                            PKR 1030.75) Tj
+(PAYABLE                             PKR 243.20) Tj
 T*
 /F1 9 Tf
-(Amount received                        1040.00) Tj
+(Amount received                         250.00) Tj
 T*
-(Balance returned                          9.25) Tj
+(Balance returned                          6.80) Tj
 T*
 (----------------------------------------------) Tj
 T*
@@ -90,10 +90,10 @@ xref
 0000000058 00000 n 
 0000000115 00000 n 
 0000000251 00000 n 
-0000001652 00000 n 
-0000001720 00000 n 
+0000001630 00000 n 
+0000001698 00000 n 
 trailer
 << /Size 7 /Root 1 0 R >>
 startxref
-1793
+1771
 %%EOF

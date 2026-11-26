@@ -8,6 +8,8 @@
 
 #include <QDate>
 
+#include <cmath>
+
 namespace PosActions {
 
 const QString kWalkIn = QStringLiteral("Walk-in");
@@ -112,6 +114,42 @@ Result openForEdit(pos::AppServices& services, const QString& orderId)
     if (hadDraft)
         message += QStringLiteral(" Your previous order is on hold.");
     return { true, message, orderId };
+}
+
+bool isEditUnchanged(pos::AppServices& services, const QString& name, const QString& contact)
+{
+    if (!isEditingPaid(services))
+        return false;
+    const pos::Order& draft = services.order().current();
+    const std::optional<pos::Order> saved = services.orders().findById(draft.id);
+    if (!saved || saved->items.size() != draft.items.size())
+        return false;
+
+    for (const pos::OrderItem& item : saved->items) {
+        bool same = false;
+        for (const pos::OrderItem& now : draft.items)
+            same = same || (now.productId == item.productId && std::fabs(now.quantity - item.quantity) < 1e-9);
+        if (!same)
+            return false;
+    }
+
+    const std::string typedName = name.isEmpty() ? ss(kWalkIn) : ss(name);
+    const std::string savedName = saved->customerName.empty() ? ss(kWalkIn) : saved->customerName;
+    return typedName == savedName && ss(contact) == saved->customerContact;
+}
+
+Result revertEdit(pos::AppServices& services)
+{
+    if (!isEditingPaid(services))
+        return { false, QStringLiteral("No order is being edited."), QString() };
+
+    const std::string id = services.order().current().id;
+    const std::optional<pos::Order> saved = services.orders().findById(id);
+    if (!saved || !services.order().load(*saved))
+        return { false, QStringLiteral("The original order could not be restored."), QString() };
+
+    const QString orderId = qs(id);
+    return { true, QStringLiteral("Changes discarded. Order %1 is back as it was.").arg(orderId), orderId };
 }
 
 } // namespace PosActions

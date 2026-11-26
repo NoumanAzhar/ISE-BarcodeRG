@@ -26,6 +26,9 @@ namespace pos {
         AddResult addByBarcode(const std::string& barcode, double quantity = 1);
         bool setQuantity(const std::string& productId, double quantity);   // replaces the quantity
         bool removeItem(const std::string& productId);
+        // True if removing this item would leave an already paid order (being edited) with no
+        // items. A paid order must keep at least one item; removeItem() refuses it too.
+        bool wouldEmptyPaidOrder(const std::string& productId) const;
         void clear();                                                 // items only; customer kept
         const Order& current() const;
 
